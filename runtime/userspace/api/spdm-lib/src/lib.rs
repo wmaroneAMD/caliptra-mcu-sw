@@ -32,3 +32,6 @@ pub mod measurements;
 
 // Chunking context for large messages
 pub mod chunk_ctx;
+
+// Platform-specific implementations
+pub mod platform;
