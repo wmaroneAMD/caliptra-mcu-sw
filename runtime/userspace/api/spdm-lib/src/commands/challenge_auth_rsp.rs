@@ -198,6 +198,7 @@ async fn encode_challenge_auth_rsp_base<'a>(
 
     // Get the certificate chain hash
     compute_cert_chain_hash(
+        ctx.hash,
         slot_id,
         ctx.device_certs_store,
         asym_algo,
