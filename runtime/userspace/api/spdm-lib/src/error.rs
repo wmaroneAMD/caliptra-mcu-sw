@@ -9,6 +9,7 @@ use crate::measurements::common::MeasurementsError;
 use crate::protocol::SignCtxError;
 use crate::transcript::TranscriptError;
 use crate::transport::TransportError;
+use crate::platform::hash::HashError;
 use libapi_caliptra::error::CaliptraApiError;
 
 #[derive(Debug)]
@@ -29,6 +30,11 @@ pub type SpdmResult<T> = Result<T, SpdmError>;
 pub type CommandResult<T> = Result<T, (bool, CommandError)>;
 
 #[derive(Debug, PartialEq)]
+pub enum PlatformError {
+    HashError(HashError),
+}
+
+#[derive(Debug, PartialEq)]
 pub enum CommandError {
     BufferTooSmall,
     Codec(CodecError),
@@ -38,6 +44,7 @@ pub enum CommandError {
     InvalidChunkContext,
     Chunk(ChunkError),
     CertStore(CertStoreError),
+    Platform(PlatformError),
     CaliptraApi(CaliptraApiError),
     Transcript(TranscriptError),
     Measurement(MeasurementsError),
