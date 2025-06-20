@@ -38,7 +38,6 @@ impl<'a> SpdmContext<'a> {
         spdm_transport: &'a mut dyn SpdmTransport,
         local_capabilities: DeviceCapabilities,
         device_certs_store: &'a dyn SpdmCertStore,
-        local_algorithms: LocalDeviceAlgorithms<'a>,
         hash: &'a mut dyn SpdmHash,
     ) -> SpdmResult<Self> {
         validate_supported_versions(supported_versions)?;

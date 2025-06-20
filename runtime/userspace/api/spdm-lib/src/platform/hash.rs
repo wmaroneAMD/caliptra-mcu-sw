@@ -2,45 +2,45 @@ extern crate alloc;
 use alloc::boxed::Box;
 use async_trait::async_trait;
 
-pub type HashResult<T> = Result<T, HashError>;
+pub type SpdmHashResult<T> = Result<T, SpdmHashError>;
 
 #[async_trait]
 pub trait SpdmHash {
-    async fn hash<'a>(&mut self, hash_algo: HashAlgoType, data: &[u8], hash: &mut [u8]) -> HashResult<()>;
-    async fn init<'a>(&mut self, hash_algo: HashAlgoType, data: Option<&[u8]>) -> HashResult<()>;
-    async fn update<'a>(&mut self, data: &[u8]) -> HashResult<()>;
-    async fn finalize<'a>(&mut self, hash: &mut [u8]) -> HashResult<()>;
+    async fn hash(&mut self, hash_algo: SpdmHashAlgoType, data: &[u8], hash: &mut [u8]) -> SpdmHashResult<()>;
+    async fn init(&mut self, hash_algo: SpdmHashAlgoType, data: Option<&[u8]>) -> SpdmHashResult<()>;
+    async fn update(&mut self, data: &[u8]) -> SpdmHashResult<()>;
+    async fn finalize(&mut self, hash: &mut [u8]) -> SpdmHashResult<()>;
 
-    fn algo(&self) -> Option<HashAlgoType>;  
+    fn algo(&self) -> Option<SpdmHashAlgoType>;  
 }
 
 #[derive(Debug, PartialEq)]
-pub enum HashError {
-    HardwareError,
+pub enum SpdmHashError {
+    PlatformError,
     BufferTooSmall,
     InvalidAlgorithm,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum HashAlgoType {
+pub enum SpdmHashAlgoType {
     SHA384,
     SHA512,
 }
 
-impl From<HashAlgoType> for u32 {
-    fn from(algo: HashAlgoType) -> Self {
+impl From<SpdmHashAlgoType> for u32 {
+    fn from(algo: SpdmHashAlgoType) -> Self {
         match algo {
-            HashAlgoType::SHA384 => 2u32,
-            HashAlgoType::SHA512 => 4u32,
+            SpdmHashAlgoType::SHA384 => 2u32,
+            SpdmHashAlgoType::SHA512 => 4u32,
         }
     }
 }
 
-impl HashAlgoType {
+impl SpdmHashAlgoType {
     pub fn hash_size(&self) -> usize {
         match self {
-            HashAlgoType::SHA384 => 48,
-            HashAlgoType::SHA512 => 64,
+            SpdmHashAlgoType::SHA384 => 48,
+            SpdmHashAlgoType::SHA512 => 64,
         }
     }
 }

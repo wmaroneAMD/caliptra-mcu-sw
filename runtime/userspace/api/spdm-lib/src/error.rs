@@ -8,7 +8,7 @@ use crate::measurements::common::MeasurementsError;
 use crate::protocol::SignCtxError;
 use crate::transcript::TranscriptError;
 use crate::transport::common::TransportError;
-use crate::platform::hash::HashError;
+use crate::platform::hash::SpdmHashError;
 use libapi_caliptra::error::CaliptraApiError;
 
 #[derive(Debug)]
@@ -30,7 +30,7 @@ pub type CommandResult<T> = Result<T, (bool, CommandError)>;
 
 #[derive(Debug, PartialEq)]
 pub enum PlatformError {
-    HashError(HashError),
+    HashError(SpdmHashError),
 }
 
 #[derive(Debug, PartialEq)]

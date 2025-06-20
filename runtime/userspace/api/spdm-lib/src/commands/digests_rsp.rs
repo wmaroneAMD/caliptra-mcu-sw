@@ -8,7 +8,7 @@ use crate::error::{PlatformError, CommandError, CommandResult};
 use crate::protocol::*;
 use crate::state::ConnectionState;
 use crate::transcript::TranscriptContext;
-use crate::platform::hash::{SpdmHash, HashAlgoType};
+use crate::platform::hash::{SpdmHash, SpdmHashAlgoType};
 use core::mem::size_of;
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
@@ -56,7 +56,7 @@ pub(crate) async fn compute_cert_chain_hash(
     let header_bytes = header.as_bytes();
     
     digest_fn
-        .init(HashAlgoType::SHA384, Some(header_bytes))
+        .init(SpdmHashAlgoType::SHA384, Some(header_bytes))
         .await
         .map_err(|e| (false, CommandError::Platform(PlatformError::HashError(e))))?;
 
