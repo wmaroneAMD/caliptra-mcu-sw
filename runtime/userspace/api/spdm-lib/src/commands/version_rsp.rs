@@ -4,6 +4,7 @@ use crate::codec::{Codec, CommonCodec, MessageBuf};
 use crate::commands::error_rsp::ErrorCode;
 use crate::context::SpdmContext;
 use crate::error::{CommandError, CommandResult};
+use crate::platform::hash::SpdmHash;
 use crate::protocol::{ReqRespCode, SpdmMsgHdr, SpdmVersion};
 use crate::state::ConnectionState;
 use crate::transcript::TranscriptContext;
@@ -78,8 +79,8 @@ impl VersionNumberEntry<[u8; VERSION_ENTRY_SIZE]> {
 
 impl CommonCodec for VersionNumberEntry<[u8; VERSION_ENTRY_SIZE]> {}
 
-async fn generate_version_response<'a>(
-    ctx: &mut SpdmContext<'a>,
+async fn generate_version_response<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     rsp_buf: &mut MessageBuf<'a>,
     supported_versions: &[SpdmVersion],
 ) -> CommandResult<()> {
@@ -113,8 +114,8 @@ async fn generate_version_response<'a>(
         .await
 }
 
-async fn process_get_version<'a>(
-    ctx: &mut SpdmContext<'a>,
+async fn process_get_version<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     spdm_hdr: SpdmMsgHdr,
     req_payload: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {
@@ -135,8 +136,8 @@ async fn process_get_version<'a>(
         .await
 }
 
-pub(crate) async fn handle_get_version<'a>(
-    ctx: &mut SpdmContext<'a>,
+pub(crate) async fn handle_get_version<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     spdm_hdr: SpdmMsgHdr,
     req_payload: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {

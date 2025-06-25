@@ -4,6 +4,7 @@ use crate::codec::{Codec, CommonCodec, MessageBuf};
 use crate::commands::error_rsp::ErrorCode;
 use crate::context::SpdmContext;
 use crate::error::{CommandResult, SpdmError};
+use crate::platform::hash::SpdmHash;
 use crate::protocol::*;
 use crate::state::ConnectionState;
 use crate::transcript::TranscriptContext;
@@ -136,7 +137,7 @@ bitfield! {
 
 impl CommonCodec for AlgStructure {}
 
-pub(crate) fn selected_measurement_specification(ctx: &SpdmContext) -> MeasurementSpecification {
+pub(crate) fn selected_measurement_specification<H: SpdmHash>(ctx: &SpdmContext<H>) -> MeasurementSpecification {
     let local_cap_flags = &ctx.local_capabilities.flags;
     let local_algorithms = &ctx.local_algorithms.device_algorithms;
     let peer_algorithms = ctx.state.connection_info.peer_algorithms();
@@ -156,8 +157,8 @@ pub(crate) fn selected_measurement_specification(ctx: &SpdmContext) -> Measureme
     measurement_specification_sel
 }
 
-async fn process_negotiate_algorithms_request<'a>(
-    ctx: &mut SpdmContext<'a>,
+async fn process_negotiate_algorithms_request<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     spdm_hdr: SpdmMsgHdr,
     req_payload: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {
@@ -285,8 +286,8 @@ async fn process_negotiate_algorithms_request<'a>(
         .await
 }
 
-async fn generate_algorithms_response<'a>(
-    ctx: &mut SpdmContext<'a>,
+async fn generate_algorithms_response<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     rsp: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {
     let connection_version = ctx.state.connection_info.version_number();
@@ -379,8 +380,8 @@ async fn generate_algorithms_response<'a>(
         .await
 }
 
-fn encode_alg_struct_table(
-    ctx: &mut SpdmContext,
+fn encode_alg_struct_table<H: SpdmHash>(
+    ctx: &mut SpdmContext<H>,
     rsp: &mut MessageBuf,
     num_alg_struct_tables: usize,
 ) -> CommandResult<usize> {
@@ -471,8 +472,8 @@ fn encode_alg_struct_table(
     Ok(len)
 }
 
-pub(crate) async fn handle_negotiate_algorithms<'a>(
-    ctx: &mut SpdmContext<'a>,
+pub(crate) async fn handle_negotiate_algorithms<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     spdm_hdr: SpdmMsgHdr,
     req_payload: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {

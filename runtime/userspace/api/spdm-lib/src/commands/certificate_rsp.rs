@@ -5,6 +5,7 @@ use crate::codec::{Codec, CommonCodec, MessageBuf};
 use crate::commands::error_rsp::ErrorCode;
 use crate::context::SpdmContext;
 use crate::error::{CommandError, CommandResult};
+use crate::platform::hash::SpdmHash;
 use crate::protocol::*;
 use crate::state::ConnectionState;
 use crate::transcript::TranscriptContext;
@@ -122,8 +123,8 @@ async fn encode_certchain_metadata(
     Ok(write_len)
 }
 
-async fn generate_certificate_response<'a>(
-    ctx: &mut SpdmContext<'a>,
+async fn generate_certificate_response<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     slot_id: u8,
     offset: u16,
     length: u16,
@@ -232,8 +233,8 @@ async fn generate_certificate_response<'a>(
         .await
 }
 
-async fn process_get_certificate<'a>(
-    ctx: &mut SpdmContext<'a>,
+async fn process_get_certificate<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     spdm_hdr: SpdmMsgHdr,
     req_payload: &mut MessageBuf<'a>,
 ) -> CommandResult<(u8, u16, u16)> {
@@ -281,8 +282,8 @@ async fn process_get_certificate<'a>(
     Ok((slot_id, offset, length))
 }
 
-pub(crate) async fn handle_get_certificate<'a>(
-    ctx: &mut SpdmContext<'a>,
+pub(crate) async fn handle_get_certificate<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     spdm_hdr: SpdmMsgHdr,
     req_payload: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {

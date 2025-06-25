@@ -11,6 +11,7 @@ use crate::commands::{
 };
 use crate::error::*;
 use crate::measurements::common::SpdmMeasurements;
+use crate::platform::hash::SpdmHash;
 use crate::protocol::algorithms::*;
 use crate::protocol::common::{ReqRespCode, SpdmMsgHdr};
 use crate::protocol::version::*;
@@ -19,8 +20,9 @@ use crate::state::{ConnectionState, State};
 use crate::transcript::{TranscriptContext, TranscriptManager};
 use crate::transport::SpdmTransport;
 
-pub struct SpdmContext<'a> {
+pub struct SpdmContext<'a, H: SpdmHash> {
     transport: &'a mut dyn SpdmTransport,
+    pub(crate) hash: H,
     pub(crate) supported_versions: &'a [SpdmVersion],
     pub(crate) state: State,
     pub(crate) transcript_mgr: TranscriptManager,
@@ -31,13 +33,14 @@ pub struct SpdmContext<'a> {
     pub(crate) large_resp_context: LargeResponseCtx,
 }
 
-impl<'a> SpdmContext<'a> {
+impl<'a, H: SpdmHash> SpdmContext<'a, H> {
     pub fn new(
         supported_versions: &'a [SpdmVersion],
         spdm_transport: &'a mut dyn SpdmTransport,
         local_capabilities: DeviceCapabilities,
         local_algorithms: LocalDeviceAlgorithms<'a>,
         device_certs_store: &'a mut dyn SpdmCertStore,
+        hash: H,
     ) -> SpdmResult<Self> {
         validate_supported_versions(supported_versions)?;
 
@@ -55,6 +58,7 @@ impl<'a> SpdmContext<'a> {
             device_certs_store,
             measurements: SpdmMeasurements::default(),
             large_resp_context: LargeResponseCtx::default(),
+            hash: hash,
         })
     }
 
