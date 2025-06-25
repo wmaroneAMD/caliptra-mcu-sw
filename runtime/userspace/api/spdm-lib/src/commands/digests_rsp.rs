@@ -5,11 +5,11 @@ use crate::codec::{Codec, CommonCodec, MessageBuf};
 use crate::commands::error_rsp::ErrorCode;
 use crate::context::SpdmContext;
 use crate::error::{CommandError, CommandResult};
+use crate::platform::hash::{SpdmHash, SpdmHashAlgoType};
 use crate::protocol::*;
 use crate::state::ConnectionState;
 use crate::transcript::TranscriptContext;
 use core::mem::size_of;
-use libapi_caliptra::crypto::hash::{HashAlgoType, HashContext};
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
 #[derive(IntoBytes, FromBytes, Immutable, Default)]
@@ -30,9 +30,9 @@ pub struct GetDigestsRespCommon {
 
 impl CommonCodec for GetDigestsRespCommon {}
 
-pub(crate) async fn compute_cert_chain_hash(
+pub(crate) async fn compute_cert_chain_hash<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     slot_id: u8,
-    cert_store: &mut dyn SpdmCertStore,
     asym_algo: AsymAlgo,
     hash: &mut [u8],
 ) -> CommandResult<()> {
@@ -40,7 +40,7 @@ pub(crate) async fn compute_cert_chain_hash(
         Err((false, CommandError::BufferTooSmall))?;
     }
 
-    let crt_chain_len = cert_store
+    let crt_chain_len = ctx.device_certs_store 
         .cert_chain_len(asym_algo, slot_id)
         .await
         .map_err(|e| (false, CommandError::CertStore(e)))?;
@@ -53,38 +53,40 @@ pub(crate) async fn compute_cert_chain_hash(
 
     // Length and reserved fields
     let header_bytes = header.as_bytes();
-    let mut hash_ctx = HashContext::new();
-    hash_ctx
-        .init(HashAlgoType::SHA384, Some(header_bytes))
+    //TODO: Fix borrowing - cannot move ctx.hash out of mutable reference
+    //TODO: Need to restructure to use &mut ctx.hash directly
+    ctx.hash
+        .init(SpdmHashAlgoType::SHA384, Some(header_bytes))
         .await
-        .map_err(|e| (false, CommandError::CaliptraApi(e)))?;
+        .map_err(|_| (false, CommandError::BufferTooSmall))?;
 
     // Root certificate hash
     let mut root_hash = [0u8; SHA384_HASH_SIZE];
 
-    cert_store
+    ctx.device_certs_store
         .root_cert_hash(slot_id, asym_algo, &mut root_hash)
         .await
         .map_err(|e| (false, CommandError::CertStore(e)))?;
-    hash_ctx
+
+    ctx.hash
         .update(&root_hash)
         .await
-        .map_err(|e| (false, CommandError::CaliptraApi(e)))?;
+        .map_err(|_| (false, CommandError::BufferTooSmall))?;
 
     // Hash the certificate chain
     let mut cert_portion = [0u8; SPDM_MAX_CERT_CHAIN_PORTION_LEN as usize];
     let mut offset = 0;
 
     loop {
-        let bytes_read = cert_store
+        let bytes_read = ctx.device_certs_store
             .get_cert_chain(slot_id, asym_algo, offset, &mut cert_portion)
             .await
             .map_err(|e| (false, CommandError::CertStore(e)))?;
 
-        hash_ctx
+        ctx.hash
             .update(&cert_portion[..bytes_read])
             .await
-            .map_err(|e| (false, CommandError::CaliptraApi(e)))?;
+            .map_err(|_| (false, CommandError::BufferTooSmall))?;
 
         offset += bytes_read;
 
@@ -93,15 +95,15 @@ pub(crate) async fn compute_cert_chain_hash(
             break;
         }
     }
-    hash_ctx
+    ctx.hash
         .finalize(hash)
         .await
-        .map_err(|e| (false, CommandError::CaliptraApi(e)))
+        .map_err(|_| (false, CommandError::BufferTooSmall))
 }
 
-async fn encode_cert_chain_digest(
+async fn encode_cert_chain_digest<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     slot_id: u8,
-    cert_store: &mut dyn SpdmCertStore,
     asym_algo: AsymAlgo,
     rsp: &mut MessageBuf<'_>,
 ) -> CommandResult<usize> {
@@ -112,7 +114,7 @@ async fn encode_cert_chain_digest(
         .data_mut(SHA384_HASH_SIZE)
         .map_err(|_| (false, CommandError::BufferTooSmall))?;
 
-    compute_cert_chain_hash(slot_id, cert_store, asym_algo, cert_chain_digest_buf).await?;
+    compute_cert_chain_hash(ctx, slot_id, asym_algo, cert_chain_digest_buf).await?;
 
     rsp.pull_data(SHA384_HASH_SIZE)
         .map_err(|_| (false, CommandError::BufferTooSmall))?;
@@ -120,8 +122,8 @@ async fn encode_cert_chain_digest(
     Ok(SHA384_HASH_SIZE)
 }
 
-async fn generate_digests_response<'a>(
-    ctx: &mut SpdmContext<'a>,
+async fn generate_digests_response<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     rsp: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {
     // Ensure the selected hash algorithm is SHA384 and retrieve the asymmetric algorithm (currently only ECC-P384 is supported)
@@ -160,8 +162,9 @@ async fn generate_digests_response<'a>(
 
     // Encode the certificate chain digests for each provisioned slot
     for slot_id in 0..slot_cnt {
+        //TODO: Fix borrowing - cannot pass ctx and ctx.device_certs_store simultaneously
         payload_len +=
-            encode_cert_chain_digest(slot_id as u8, ctx.device_certs_store, asym_algo, rsp)
+            encode_cert_chain_digest(ctx, slot_id as u8, asym_algo, rsp)
                 .await
                 .map_err(|_| ctx.generate_error_response(rsp, ErrorCode::Unspecified, 0, None))?;
     }
@@ -180,8 +183,8 @@ async fn generate_digests_response<'a>(
         .await
 }
 
-fn encode_multi_key_conn_rsp_data(
-    ctx: &mut SpdmContext,
+fn encode_multi_key_conn_rsp_data<H: SpdmHash>(
+    ctx: &mut SpdmContext<H>,
     provisioned_slot_mask: u8,
     rsp: &mut MessageBuf,
 ) -> CommandResult<usize> {
@@ -241,8 +244,8 @@ fn encode_multi_key_conn_rsp_data(
     Ok(total_size)
 }
 
-async fn process_get_digests<'a>(
-    ctx: &mut SpdmContext<'a>,
+async fn process_get_digests<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     spdm_hdr: SpdmMsgHdr,
     req_payload: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {
@@ -270,8 +273,8 @@ async fn process_get_digests<'a>(
         .await
 }
 
-pub(crate) async fn handle_get_digests<'a>(
-    ctx: &mut SpdmContext<'a>,
+pub(crate) async fn handle_get_digests<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     spdm_hdr: SpdmMsgHdr,
     req_payload: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {

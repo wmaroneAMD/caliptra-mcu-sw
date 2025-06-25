@@ -10,6 +10,7 @@ use crate::error::{CommandError, CommandResult};
 use crate::measurements::common::{
     MeasurementChangeStatus, MeasurementsError, SpdmMeasurements, SPDM_MAX_MEASUREMENT_RECORD_SIZE,
 };
+use crate::platform::hash::SpdmHash;
 use crate::protocol::*;
 use crate::state::ConnectionState;
 use crate::transcript::{TranscriptContext, TranscriptManager};
@@ -383,8 +384,8 @@ impl MeasurementsResponse {
     }
 }
 
-async fn process_get_measurements<'a>(
-    ctx: &mut SpdmContext<'a>,
+async fn process_get_measurements<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     spdm_hdr: SpdmMsgHdr,
     req_payload: &mut MessageBuf<'a>,
 ) -> CommandResult<MeasurementsResponse> {
@@ -449,8 +450,8 @@ async fn process_get_measurements<'a>(
     Ok(get_meas_req_context)
 }
 
-pub(crate) async fn generate_measurements_response<'a>(
-    ctx: &mut SpdmContext<'a>,
+pub(crate) async fn generate_measurements_response<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     rsp_ctx: MeasurementsResponse,
     rsp: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {
@@ -494,8 +495,8 @@ pub(crate) async fn generate_measurements_response<'a>(
     }
 }
 
-pub(crate) async fn handle_get_measurements<'a>(
-    ctx: &mut SpdmContext<'a>,
+pub(crate) async fn handle_get_measurements<'a, H: SpdmHash>(
+    ctx: &mut SpdmContext<'a, H>,
     spdm_hdr: SpdmMsgHdr,
     req_payload: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {
