@@ -11,7 +11,8 @@ pub trait SpdmHash {
     async fn update(&mut self, data: &[u8]) -> SpdmHashResult<()>;
     async fn finalize(&mut self, hash: &mut [u8]) -> SpdmHashResult<()>;
 
-    fn algo(&self) -> Option<SpdmHashAlgoType>;  
+    fn reset(&mut self);
+    fn algo(&self) -> SpdmHashAlgoType;  
 }
 
 #[derive(Debug, PartialEq)]

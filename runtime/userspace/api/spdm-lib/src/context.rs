@@ -25,7 +25,7 @@ pub struct SpdmContext<'a> {
     pub(crate) hash: &'a mut dyn SpdmHash,
     pub(crate) supported_versions: &'a [SpdmVersion],
     pub(crate) state: State,
-    pub(crate) transcript_mgr: TranscriptManager,
+    pub(crate) transcript_mgr: TranscriptManager<'a>,
     pub(crate) local_capabilities: DeviceCapabilities,
     pub(crate) local_algorithms: LocalDeviceAlgorithms<'a>,
     pub(crate) device_certs_store: &'a mut dyn SpdmCertStore,
@@ -41,6 +41,8 @@ impl<'a> SpdmContext<'a> {
         local_algorithms: LocalDeviceAlgorithms<'a>,
         device_certs_store: &'a mut dyn SpdmCertStore,
         hash: &'a mut dyn SpdmHash,
+        m1: &'a mut dyn SpdmHash,
+        l1: &'a mut dyn SpdmHash,
     ) -> SpdmResult<Self> {
         validate_supported_versions(supported_versions)?;
 
@@ -52,7 +54,7 @@ impl<'a> SpdmContext<'a> {
             supported_versions,
             transport: spdm_transport,
             state: State::new(),
-            transcript_mgr: TranscriptManager::new(),
+            transcript_mgr: TranscriptManager::new(m1, l1),
             local_capabilities,
             local_algorithms,
             device_certs_store,
