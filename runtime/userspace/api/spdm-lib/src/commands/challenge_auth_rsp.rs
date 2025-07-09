@@ -5,12 +5,12 @@ use crate::commands::algorithms_rsp::selected_measurement_specification;
 use crate::commands::digests_rsp::compute_cert_chain_hash;
 use crate::commands::error_rsp::ErrorCode;
 use crate::context::SpdmContext;
-use crate::error::{CommandError, CommandResult};
+use crate::error::{CommandError, CommandResult, PlatformError};
+use crate::platform::hash::SpdmHashAlgoType;
 use crate::protocol::*;
 use crate::state::ConnectionState;
 use crate::transcript::TranscriptContext;
 use bitfield::bitfield;
-use libapi_caliptra::crypto::hash::{HashAlgoType, HashContext};
 use libapi_caliptra::crypto::rng::Rng;
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
@@ -146,7 +146,6 @@ async fn encode_m1_signature<'a>(
 
     let context = signing_context.as_ref().map(|x| &x[..]);
 
-    let mut hash_ctx = HashContext::new();
     let tbs = if let Some(context) = context {
         // If the signing context is present, use it to compute the TBS hash
         let mut tbs = [0u8; SHA384_HASH_SIZE];
@@ -154,14 +153,14 @@ async fn encode_m1_signature<'a>(
         message[..SPDM_SIGNING_CONTEXT_LEN].copy_from_slice(context);
         message[SPDM_SIGNING_CONTEXT_LEN..]
             .copy_from_slice(&m1_transcript_hash[..SHA384_HASH_SIZE]);
-        hash_ctx
-            .init(HashAlgoType::SHA384, Some(&message[..]))
+        ctx.hash
+            .init(SpdmHashAlgoType::SHA384, Some(&message[..]))
             .await
-            .map_err(|e| (false, CommandError::CaliptraApi(e)))?;
-        hash_ctx
+            .map_err(|e| (false, CommandError::Platform(PlatformError::HashError(e))))?;
+        ctx.hash
             .finalize(&mut tbs)
             .await
-            .map_err(|e| (false, CommandError::CaliptraApi(e)))?;
+            .map_err(|e| (false, CommandError::Platform(PlatformError::HashError(e))))?;
         tbs
     } else {
         m1_transcript_hash

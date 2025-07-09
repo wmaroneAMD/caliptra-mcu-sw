@@ -49,12 +49,17 @@ struct LocalHash {
 }
 
 impl LocalHash { 
-    fn new(hash_algo: SpdmHashAlgoType) -> Self {
-        let ctx = HashContext::new();
-        let algo = match hash_algo {
+
+    fn translate_algo(algo: SpdmHashAlgoType) -> HashAlgoType {
+        match algo {
             SpdmHashAlgoType::SHA384 => HashAlgoType::SHA384,
             SpdmHashAlgoType::SHA512 => HashAlgoType::SHA512,
-        };
+        }
+    }
+
+    fn new(hash_algo: SpdmHashAlgoType) -> Self {
+        let ctx = HashContext::new();
+        let algo = Self::translate_algo(hash_algo);
 
         LocalHash {
             ctx: ctx,
@@ -72,8 +77,8 @@ impl LocalHash {
 
 #[async_trait]
 impl SpdmHash for LocalHash {
-    async fn hash(&mut self, _hash_algo: SpdmHashAlgoType, data: &[u8], hash: &mut [u8]) -> SpdmHashResult<()> {
-        self.ctx.init(self.local_hash_algo, Some(data))
+    async fn hash(&mut self, hash_algo: SpdmHashAlgoType, data: &[u8], hash: &mut [u8]) -> SpdmHashResult<()> {
+        self.ctx.init(Self::translate_algo(hash_algo), Some(data))
             .await
             .map_err(|e| LocalHash::translate_error(e))?;
 
@@ -87,8 +92,8 @@ impl SpdmHash for LocalHash {
             .map_err(|e| LocalHash::translate_error(e))
     }
 
-    async fn init(&mut self, _hash_algo: SpdmHashAlgoType, data: Option<&[u8]>) -> SpdmHashResult<()> {
-        self.ctx.init(self.local_hash_algo, data)
+    async fn init(&mut self, hash_algo: SpdmHashAlgoType, data: Option<&[u8]>) -> SpdmHashResult<()> {
+        self.ctx.init(Self::translate_algo(hash_algo), data)
             .await
             .map_err(|e| LocalHash::translate_error(e))
     }
@@ -102,11 +107,19 @@ impl SpdmHash for LocalHash {
     async fn finalize(&mut self, hash: &mut [u8]) -> SpdmHashResult<()> {
         self.ctx.finalize(hash)
             .await
-            .map_err(|e| LocalHash::translate_error(e))
+            .map_err(|e| LocalHash::translate_error(e))?;
+
+        self.ctx = HashContext::new();
+
+        Ok(())
     }
 
-    fn algo(&self) -> Option<SpdmHashAlgoType> {
-        Some(self.spdm_hash_algo)
+    fn reset(&mut self) {
+        self.ctx = HashContext::new();
+    }
+
+    fn algo(&self) -> SpdmHashAlgoType {
+        self.spdm_hash_algo
     }
 }
 
@@ -151,6 +164,8 @@ async fn spdm_mctp_responder() {
     let mut mctp_spdm_transport: MctpTransport = MctpTransport::new(mctp::driver_num::MCTP_SPDM);
 
     let mut spdm_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
+    let mut m1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
+    let mut l1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
 
     let max_mctp_spdm_msg_size =
         (MAX_RESPONDER_BUF_SIZE - mctp_spdm_transport.header_size()) as u32;
@@ -171,6 +186,8 @@ async fn spdm_mctp_responder() {
         local_capabilities,
         &shared_cert_store,
         &mut spdm_hash,
+        &mut m1_hash,
+        &mut l1_hash,
     ) {
         Ok(ctx) => ctx,
         Err(e) => {
@@ -205,6 +222,8 @@ async fn spdm_doe_responder() {
     let mut doe_spdm_transport: DoeTransport = DoeTransport::new(doe::driver_num::DOE_SPDM);
 
     let mut spdm_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
+    let mut m1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
+    let mut l1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
 
     let max_doe_spdm_msg_size = (MAX_RESPONDER_BUF_SIZE - doe_spdm_transport.header_size()) as u32;
 
@@ -224,6 +243,8 @@ async fn spdm_doe_responder() {
         local_capabilities,
         &shared_cert_store,
         &mut spdm_hash,
+        &mut m1_hash,
+        &mut l1_hash,
     ) {
         Ok(ctx) => ctx,
         Err(e) => {

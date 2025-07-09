@@ -97,7 +97,7 @@ impl MeasurementsResponse {
     pub async fn get_chunk(
         &self,
         measurements: &mut SpdmMeasurements,
-        transcript_mgr: &mut TranscriptManager,
+        transcript_mgr: &mut TranscriptManager<'_>,
         cert_store: &dyn SpdmCertStore,
         offset: usize,
         chunk_buf: &mut [u8],
@@ -297,7 +297,7 @@ impl MeasurementsResponse {
     async fn l1_signature(
         &self,
         asym_algo: AsymAlgo,
-        transcript: &mut TranscriptManager,
+        transcript: &mut TranscriptManager<'_>,
         cert_store: &dyn SpdmCertStore,
     ) -> CommandResult<[u8; ECC_P384_SIGNATURE_SIZE]> {
         let mut signature = [0u8; ECC_P384_SIGNATURE_SIZE];
@@ -312,7 +312,7 @@ impl MeasurementsResponse {
     async fn encode_l1_signature(
         &self,
         asym_algo: AsymAlgo,
-        transcript: &mut TranscriptManager,
+        transcript: &mut TranscriptManager<'_>,
         cert_store: &dyn SpdmCertStore,
         buf: &mut MessageBuf<'_>,
     ) -> CommandResult<usize> {
