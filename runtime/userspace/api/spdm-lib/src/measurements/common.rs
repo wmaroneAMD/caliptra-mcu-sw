@@ -1,6 +1,7 @@
 // Licensed under the Apache-2.0 license
 use crate::measurements::freeform_manifest::FreeformManifest;
 use crate::protocol::{algorithms::AsymAlgo, MeasurementSpecification, SHA384_HASH_SIZE};
+use crate::platform::hash::{SpdmHash, SpdmHashError};
 use bitfield::bitfield;
 use libapi_caliptra::error::CaliptraApiError;
 use zerocopy::{FromBytes, Immutable, IntoBytes};
@@ -18,6 +19,7 @@ pub enum MeasurementsError {
     InvalidOperation,
     InvalidSlotId,
     MeasurementSizeMismatch,
+    Platform(SpdmHashError),
     CaliptraApi(CaliptraApiError),
 }
 pub type MeasurementsResult<T> = Result<T, MeasurementsError>;
@@ -122,6 +124,7 @@ impl SpdmMeasurements {
     /// A result indicating success or failure.
     pub(crate) async fn measurement_summary_hash(
         &mut self,
+        hash_ctx: &mut dyn SpdmHash,
         asym_algo: AsymAlgo,
         measurement_summary_hash_type: u8,
         hash: &mut [u8; SHA384_HASH_SIZE],
@@ -129,7 +132,7 @@ impl SpdmMeasurements {
         match self {
             SpdmMeasurements::FreeformManifest(manifest) => {
                 manifest
-                    .measurement_summary_hash(asym_algo, measurement_summary_hash_type, hash)
+                    .measurement_summary_hash(hash_ctx, asym_algo, measurement_summary_hash_type, hash)
                     .await
             }
         }

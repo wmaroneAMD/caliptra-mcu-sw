@@ -5,7 +5,7 @@ use crate::measurements::common::{
     SPDM_MEASUREMENT_MANIFEST_INDEX,
 };
 use crate::protocol::{algorithms::AsymAlgo, SHA384_HASH_SIZE};
-use libapi_caliptra::crypto::hash::{HashAlgoType, HashContext};
+use crate::platform::hash::SpdmHash;
 use libapi_caliptra::evidence::{Evidence, PCR_QUOTE_BUFFER_SIZE};
 use libapi_caliptra::mailbox_api::MAX_CRYPTO_MBOX_DATA_SIZE;
 use zerocopy::IntoBytes;
@@ -87,6 +87,7 @@ impl FreeformManifest {
 
     pub(crate) async fn measurement_summary_hash(
         &mut self,
+        hash_ctx: &mut dyn SpdmHash,
         asym_algo: AsymAlgo,
         _measurement_summary_hash_type: u8,
         hash: &mut [u8; SHA384_HASH_SIZE],
@@ -94,7 +95,7 @@ impl FreeformManifest {
         self.refresh_measurement_record(asym_algo).await?;
 
         let mut offset = 0;
-        let mut hash_ctx = HashContext::new();
+//        let mut hash_ctx = HashContext::new();
 
         while offset < self.measurement_record.len() {
             let chunk_size = MAX_CRYPTO_MBOX_DATA_SIZE.min(self.measurement_record.len() - offset);
@@ -102,17 +103,17 @@ impl FreeformManifest {
             if offset == 0 {
                 hash_ctx
                     .init(
-                        HashAlgoType::SHA384,
+                        hash_ctx.algo(),
                         Some(&self.measurement_record[..chunk_size]),
                     )
                     .await
-                    .map_err(MeasurementsError::CaliptraApi)?;
+                    .map_err(|e| MeasurementsError::Platform(e))?;
             } else {
                 let chunk = &self.measurement_record[offset..offset + chunk_size];
                 hash_ctx
                     .update(chunk)
                     .await
-                    .map_err(MeasurementsError::CaliptraApi)?;
+                    .map_err(|e| MeasurementsError::Platform(e))?;
             }
 
             offset += chunk_size;
@@ -121,7 +122,7 @@ impl FreeformManifest {
         hash_ctx
             .finalize(hash)
             .await
-            .map_err(MeasurementsError::CaliptraApi)
+            .map_err(|e| MeasurementsError::Platform(e))
     }
 
     async fn refresh_measurement_record(&mut self, asym_algo: AsymAlgo) -> MeasurementsResult<()> {
