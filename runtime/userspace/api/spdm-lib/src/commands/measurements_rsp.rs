@@ -13,6 +13,7 @@ use crate::measurements::common::{
 use crate::protocol::*;
 use crate::state::ConnectionState;
 use crate::transcript::{TranscriptContext, TranscriptManager};
+use crate::platform::hash::{SpdmHash};
 use bitfield::bitfield;
 use libapi_caliptra::crypto::rng::Rng;
 use zerocopy::{FromBytes, Immutable, IntoBytes};
@@ -96,6 +97,7 @@ pub(crate) struct MeasurementsResponse {
 impl MeasurementsResponse {
     pub async fn get_chunk(
         &self,
+        hash_ctx: &mut dyn SpdmHash,
         measurements: &mut SpdmMeasurements,
         transcript_mgr: &mut TranscriptManager<'_>,
         cert_store: &dyn SpdmCertStore,
@@ -180,7 +182,7 @@ impl MeasurementsResponse {
             && offset + copied >= signature_start
         {
             let signature = self
-                .l1_signature(self.asym_algo, transcript_mgr, cert_store)
+                .l1_signature(self.asym_algo, hash_ctx, transcript_mgr, cert_store)
                 .await?;
             let sig_offset = (offset + copied) - signature_start;
             let copy_len = (signature.len() - sig_offset).min(rem_len);
@@ -297,13 +299,14 @@ impl MeasurementsResponse {
     async fn l1_signature(
         &self,
         asym_algo: AsymAlgo,
+        hash: &mut dyn SpdmHash,
         transcript: &mut TranscriptManager<'_>,
         cert_store: &dyn SpdmCertStore,
     ) -> CommandResult<[u8; ECC_P384_SIGNATURE_SIZE]> {
         let mut signature = [0u8; ECC_P384_SIGNATURE_SIZE];
         let mut signature_buf = MessageBuf::new(&mut signature);
         let _ = self
-            .encode_l1_signature(asym_algo, transcript, cert_store, &mut signature_buf)
+            .encode_l1_signature(asym_algo, hash, transcript, cert_store, &mut signature_buf)
             .await?;
 
         Ok(signature)
@@ -312,6 +315,7 @@ impl MeasurementsResponse {
     async fn encode_l1_signature(
         &self,
         asym_algo: AsymAlgo,
+        hash: &mut dyn SpdmHash,
         transcript: &mut TranscriptManager<'_>,
         cert_store: &dyn SpdmCertStore,
         buf: &mut MessageBuf<'_>,
@@ -329,6 +333,7 @@ impl MeasurementsResponse {
             self.spdm_version,
             ReqRespCode::Measurements,
             l1_transcript_hash,
+            hash,
         )
         .await
         .map_err(|e| (false, CommandError::SignCtx(e)))?;
@@ -474,6 +479,7 @@ pub(crate) async fn generate_measurements_response<'a>(
             .map_err(|e| (false, CommandError::Codec(e)))?;
         let payload_len = rsp_ctx
             .get_chunk(
+                ctx.hash,
                 &mut ctx.measurements,
                 &mut ctx.transcript_mgr,
                 ctx.device_certs_store,

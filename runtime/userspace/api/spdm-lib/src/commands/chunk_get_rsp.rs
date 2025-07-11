@@ -162,6 +162,7 @@ async fn encode_chunk_data(
                 // Get the chunk data from the measurements response
                 meas_rsp
                     .get_chunk(
+                        ctx.hash,
                         &mut ctx.measurements,
                         &mut ctx.transcript_mgr,
                         ctx.device_certs_store,
