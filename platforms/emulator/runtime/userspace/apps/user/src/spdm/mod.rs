@@ -13,7 +13,9 @@ use spdm_lib::context::SpdmContext;
 use spdm_lib::protocol::*;
 use spdm_lib::transport::{MctpTransport, SpdmTransport};
 use spdm_lib::platform::hash::{SpdmHash, SpdmHashResult, SpdmHashAlgoType, SpdmHashError};
+use spdm_lib::platform::rng::{SpdmRng, SpdmRngError, SpdmRngResult};
 use libapi_caliptra::crypto::hash::{HashAlgoType, HashContext};
+use libapi_caliptra::crypto::rng::Rng;
 
 extern crate alloc;
 use alloc::boxed::Box;
@@ -31,6 +33,33 @@ static HASH_PRIORITY_TABLE: &[BaseHashAlgoType] = &[
     BaseHashAlgoType::TpmAlgSha384,
     BaseHashAlgoType::TpmAlgSha256,
 ];
+
+struct LocalRng;
+
+impl LocalRng {
+    fn new() -> Self {
+        LocalRng {}
+    }
+
+    fn translate_error(e: CaliptraApiError) -> SpdmRngError {
+        match e {
+            _ => SpdmRngError::InvalidSize, // Just map everything to this for now
+        }
+    }
+}
+
+#[async_trait]
+impl SpdmRng for LocalRng {
+    async fn generate_random_number(&mut self, random_number: &mut [u8]) -> SpdmRngResult<()> {
+        Rng::generate_random_number(random_number)
+            .await
+            .map_err(|e| Self::translate_error(e))
+    }
+
+    async fn get_random_bytes(&mut self, buf: &mut [u8]) -> SpdmRngResult<()> {
+        Ok(())
+    }
+}
 
 struct LocalHash {
     spdm_hash_algo: SpdmHashAlgoType,
@@ -130,6 +159,7 @@ async fn spdm_loop(raw_buffer: &mut [u8], cw: &mut ConsoleWriter<DefaultSyscalls
     let mut spdm_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
     let mut m1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
     let mut l1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
+    let mut rng = LocalRng::new();
 
     let mut mctp_spdm_transport: MctpTransport = MctpTransport::new(driver_num::MCTP_SPDM);
 
@@ -179,6 +209,7 @@ async fn spdm_loop(raw_buffer: &mut [u8], cw: &mut ConsoleWriter<DefaultSyscalls
         &mut spdm_hash,
         &mut m1_hash,
         &mut l1_hash,
+        &mut rng,
     ) {
         Ok(ctx) => ctx,
         Err(e) => {

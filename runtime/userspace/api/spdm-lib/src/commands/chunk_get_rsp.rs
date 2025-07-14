@@ -163,6 +163,7 @@ async fn encode_chunk_data(
                 meas_rsp
                     .get_chunk(
                         ctx.hash,
+                        ctx.rng,
                         &mut ctx.measurements,
                         &mut ctx.transcript_mgr,
                         ctx.device_certs_store,

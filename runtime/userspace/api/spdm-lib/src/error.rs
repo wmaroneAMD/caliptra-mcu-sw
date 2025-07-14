@@ -6,6 +6,7 @@ use crate::chunk_ctx::ChunkError;
 use crate::codec::CodecError;
 use crate::commands::error_rsp::ErrorCode;
 use crate::measurements::common::MeasurementsError;
+use crate::platform::rng::SpdmRngError;
 use crate::protocol::SignCtxError;
 use crate::transcript::TranscriptError;
 use crate::transport::TransportError;
@@ -32,6 +33,7 @@ pub type CommandResult<T> = Result<T, (bool, CommandError)>;
 #[derive(Debug, PartialEq)]
 pub enum PlatformError {
     HashError(SpdmHashError),
+    RngError(SpdmRngError),
 }
 
 #[derive(Debug, PartialEq)]

@@ -6,16 +6,16 @@ use crate::codec::{encode_u8_slice, Codec, CommonCodec, MessageBuf};
 use crate::commands::algorithms_rsp::selected_measurement_specification;
 use crate::commands::error_rsp::ErrorCode;
 use crate::context::SpdmContext;
-use crate::error::{CommandError, CommandResult};
+use crate::error::{CommandError, CommandResult, PlatformError};
 use crate::measurements::common::{
     MeasurementChangeStatus, MeasurementsError, SpdmMeasurements, SPDM_MAX_MEASUREMENT_RECORD_SIZE,
 };
 use crate::protocol::*;
 use crate::state::ConnectionState;
 use crate::transcript::{TranscriptContext, TranscriptManager};
-use crate::platform::hash::{SpdmHash};
+use crate::platform::hash::SpdmHash;
+use crate::platform::rng::SpdmRng;
 use bitfield::bitfield;
-use libapi_caliptra::crypto::rng::Rng;
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
 const RESPONSE_FIXED_FIELDS_SIZE: usize = 8;
@@ -98,6 +98,7 @@ impl MeasurementsResponse {
     pub async fn get_chunk(
         &self,
         hash_ctx: &mut dyn SpdmHash,
+        rng: &mut dyn SpdmRng,
         measurements: &mut SpdmMeasurements,
         transcript_mgr: &mut TranscriptManager<'_>,
         cert_store: &mut dyn SpdmCertStore,
@@ -160,7 +161,7 @@ impl MeasurementsResponse {
         let trailer_start = record_end;
         if rem_len > 0 && offset + copied >= trailer_start {
             let trailer_offset = (offset + copied) - trailer_start;
-            let (variable_fields, trailer_len) = self.response_variable_fields().await?;
+            let (variable_fields, trailer_len) = self.response_variable_fields(rng).await?;
             let end = (trailer_len).min(trailer_offset + rem_len);
             let copy_len = end - trailer_offset;
             chunk_buf[copied..copied + copy_len]
@@ -176,7 +177,7 @@ impl MeasurementsResponse {
             .map_err(|e| (false, CommandError::Transcript(e)))?;
 
         // 4. Copy from the signature if requested
-        let signature_start = trailer_start + self.response_variable_fields().await?.1;
+        let signature_start = trailer_start + self.response_variable_fields(rng).await?.1;
         if rem_len > 0
             && self.req_attr.signature_requested() == 1
             && offset + copied >= signature_start
@@ -259,24 +260,26 @@ impl MeasurementsResponse {
 
     async fn response_variable_fields(
         &self,
-    ) -> CommandResult<([u8; MAX_RESPONSE_VARIABLE_FIELDS_SIZE], usize)> {
+        rng: &mut dyn SpdmRng,  
+     ) -> CommandResult<([u8; MAX_RESPONSE_VARIABLE_FIELDS_SIZE], usize)> {
         let mut trailer_rsp = [0u8; MAX_RESPONSE_VARIABLE_FIELDS_SIZE];
         let mut trailer_buf = MessageBuf::new(&mut trailer_rsp);
         let len = self
-            .encode_response_variable_fields(&mut trailer_buf)
+            .encode_response_variable_fields(rng, &mut trailer_buf)
             .await?;
         Ok((trailer_rsp, len))
     }
 
     async fn encode_response_variable_fields(
         &self,
+        rng: &mut dyn SpdmRng,
         buf: &mut MessageBuf<'_>,
     ) -> CommandResult<usize> {
         // Encode the nonce
         let mut nonce = [0u8; NONCE_LEN];
-        Rng::generate_random_number(&mut nonce)
+        rng.generate_random_number(&mut nonce)
             .await
-            .map_err(|e| (false, CommandError::CaliptraApi(e)))?;
+            .map_err(|e| (false, CommandError::Platform(PlatformError::RngError(e))))?;
         let mut len = encode_u8_slice(&nonce, buf).map_err(|e| (false, CommandError::Codec(e)))?;
 
         // Encode the opaque data length (always 0 in this case)
@@ -479,6 +482,7 @@ pub(crate) async fn generate_measurements_response<'a>(
         let payload_len = rsp_ctx
             .get_chunk(
                 ctx.hash,
+                ctx.rng,
                 &mut ctx.measurements,
                 &mut ctx.transcript_mgr,
                 ctx.device_certs_store,

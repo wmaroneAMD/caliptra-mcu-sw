@@ -11,7 +11,6 @@ use crate::protocol::*;
 use crate::state::ConnectionState;
 use crate::transcript::TranscriptContext;
 use bitfield::bitfield;
-use libapi_caliptra::crypto::rng::Rng;
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
 #[derive(FromBytes, IntoBytes, Immutable)]
@@ -199,9 +198,10 @@ async fn encode_challenge_auth_rsp_base<'a>(
     .await?;
 
     // Get the nonce
-    Rng::generate_random_number(&mut challenge_auth_rsp.nonce)
+    ctx.rng
+        .generate_random_number(&mut challenge_auth_rsp.nonce)
         .await
-        .map_err(|e| (false, CommandError::CaliptraApi(e)))?;
+        .map_err(|e| (false, CommandError::Platform(PlatformError::RngError(e))))?;
 
     // Encode the response
     challenge_auth_rsp
