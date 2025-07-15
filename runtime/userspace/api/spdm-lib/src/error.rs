@@ -9,7 +9,7 @@ use crate::measurements::common::MeasurementsError;
 use crate::platform::rng::SpdmRngError;
 use crate::protocol::SignCtxError;
 use crate::transcript::TranscriptError;
-use crate::transport::TransportError;
+use crate::platform::transport::TransportError;
 use crate::platform::hash::SpdmHashError;
 use crate::platform::evidence::SpdmEvidenceError;
 use libapi_caliptra::error::CaliptraApiError;
