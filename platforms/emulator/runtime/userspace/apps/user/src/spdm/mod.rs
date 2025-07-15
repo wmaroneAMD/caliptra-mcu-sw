@@ -14,8 +14,10 @@ use spdm_lib::protocol::*;
 use spdm_lib::transport::{MctpTransport, SpdmTransport};
 use spdm_lib::platform::hash::{SpdmHash, SpdmHashResult, SpdmHashAlgoType, SpdmHashError};
 use spdm_lib::platform::rng::{SpdmRng, SpdmRngError, SpdmRngResult};
+use spdm_lib::platform::evidence::{SpdmEvidence, SpdmEvidenceError, SpdmEvidenceResult};
 use libapi_caliptra::crypto::hash::{HashAlgoType, HashContext};
 use libapi_caliptra::crypto::rng::Rng;
+use libapi_caliptra::evidence::Evidence;
 
 extern crate alloc;
 use alloc::boxed::Box;
@@ -33,6 +35,33 @@ static HASH_PRIORITY_TABLE: &[BaseHashAlgoType] = &[
     BaseHashAlgoType::TpmAlgSha384,
     BaseHashAlgoType::TpmAlgSha256,
 ];
+
+struct LocalEvidence;
+
+impl LocalEvidence {
+    fn new() -> Self {
+        LocalEvidence {}
+    }
+
+    fn translate_error(e: CaliptraApiError) -> SpdmEvidenceError {
+        match e {
+            _ => SpdmEvidenceError::InvalidEvidence, // Just map everything to this for now
+        }
+    }
+}
+
+#[async_trait]
+impl SpdmEvidence for LocalEvidence {
+    async fn pcr_quote(&self, buffer: &mut [u8], with_pqc_sig: bool) -> SpdmEvidenceResult<usize> {
+        Evidence::pcr_quote(buffer, with_pqc_sig)
+            .await
+            .map_err(|e| Self::translate_error(e))
+    }
+
+    async fn pcr_quote_size(&self, with_pqc_sig: bool) -> SpdmEvidenceResult<usize> {
+        Ok(Evidence::pcr_quote_size(with_pqc_sig).await)
+    }
+}
 
 struct LocalRng;
 
@@ -160,6 +189,7 @@ async fn spdm_loop(raw_buffer: &mut [u8], cw: &mut ConsoleWriter<DefaultSyscalls
     let mut m1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
     let mut l1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
     let mut rng = LocalRng::new();
+    let mut evidence = LocalEvidence::new();
 
     let mut mctp_spdm_transport: MctpTransport = MctpTransport::new(driver_num::MCTP_SPDM);
 
@@ -210,6 +240,7 @@ async fn spdm_loop(raw_buffer: &mut [u8], cw: &mut ConsoleWriter<DefaultSyscalls
         &mut m1_hash,
         &mut l1_hash,
         &mut rng,
+        &mut evidence,
     ) {
         Ok(ctx) => ctx,
         Err(e) => {

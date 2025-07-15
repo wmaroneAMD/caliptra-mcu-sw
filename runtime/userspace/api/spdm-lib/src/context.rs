@@ -11,6 +11,7 @@ use crate::commands::{
 };
 use crate::error::*;
 use crate::measurements::common::SpdmMeasurements;
+use crate::platform::evidence::SpdmEvidence;
 use crate::protocol::algorithms::*;
 use crate::protocol::common::{ReqRespCode, SpdmMsgHdr};
 use crate::protocol::version::*;
@@ -33,6 +34,7 @@ pub struct SpdmContext<'a> {
     pub(crate) device_certs_store: &'a mut dyn SpdmCertStore,
     pub(crate) measurements: SpdmMeasurements,
     pub(crate) large_resp_context: LargeResponseCtx,
+    pub(crate) evidence: &'a dyn SpdmEvidence,
 }
 
 impl<'a> SpdmContext<'a> {
@@ -46,6 +48,7 @@ impl<'a> SpdmContext<'a> {
         m1: &'a mut dyn SpdmHash,
         l1: &'a mut dyn SpdmHash,
         rng: &'a mut dyn SpdmRng,
+        evidence: &'a dyn SpdmEvidence,
     ) -> SpdmResult<Self> {
         validate_supported_versions(supported_versions)?;
 
@@ -65,6 +68,7 @@ impl<'a> SpdmContext<'a> {
             large_resp_context: LargeResponseCtx::default(),
             hash: hash,
             rng: rng,
+            evidence: evidence,
         })
     }
 
