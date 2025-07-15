@@ -18,7 +18,6 @@ use spdm_lib::protocol::*;
 use spdm_lib::transport::common::SpdmTransport;
 use spdm_lib::transport::doe::DoeTransport;
 use spdm_lib::transport::mctp::MctpTransport;
-
 use spdm_lib::platform::hash::{SpdmHash, SpdmHashResult, SpdmHashAlgoType, SpdmHashError};
 use spdm_lib::platform::rng::{SpdmRng, SpdmRngError, SpdmRngResult};
 use spdm_lib::platform::evidence::{SpdmEvidence, SpdmEvidenceError, SpdmEvidenceResult};
