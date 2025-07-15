@@ -15,6 +15,7 @@ use crate::state::ConnectionState;
 use crate::transcript::{TranscriptContext, TranscriptManager};
 use crate::platform::hash::SpdmHash;
 use crate::platform::rng::SpdmRng;
+use crate::platform::evidence::SpdmEvidence;
 use bitfield::bitfield;
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
@@ -99,6 +100,7 @@ impl MeasurementsResponse {
         &self,
         hash_ctx: &mut dyn SpdmHash,
         rng: &mut dyn SpdmRng,
+        evidence: &dyn SpdmEvidence,
         measurements: &mut SpdmMeasurements,
         transcript_mgr: &mut TranscriptManager<'_>,
         cert_store: &dyn SpdmCertStore,
@@ -106,7 +108,7 @@ impl MeasurementsResponse {
         chunk_buf: &mut [u8],
     ) -> CommandResult<usize> {
         // Calculate the size of the response
-        let response_size = self.response_size(measurements).await?;
+        let response_size = self.response_size(evidence, measurements).await?;
 
         // Check if the offset is valid
         if offset >= response_size {
@@ -119,7 +121,7 @@ impl MeasurementsResponse {
         let raw_bitstream_requested = self.req_attr.raw_bitstream_requested() == 1;
 
         let measurement_record_len = measurements
-            .measurement_block_size(self.asym_algo, self.meas_op, raw_bitstream_requested)
+            .measurement_block_size(evidence, self.asym_algo, self.meas_op, raw_bitstream_requested)
             .await
             .map_err(|e| (false, CommandError::Measurement(e)))?;
         // Fill the chunk buffer with the appropriate response sections
@@ -128,7 +130,7 @@ impl MeasurementsResponse {
 
         // 1. Copy from the fixed response fields
         if offset < RESPONSE_FIXED_FIELDS_SIZE {
-            let fixed_fields = self.response_fixed_fields(measurements).await?;
+            let fixed_fields = self.response_fixed_fields(evidence, measurements).await?;
             let start = offset;
             let end = (RESPONSE_FIXED_FIELDS_SIZE).min(start + rem_len);
             let copy_len = end - start;
@@ -145,6 +147,7 @@ impl MeasurementsResponse {
             let bytes_to_copy = (measurement_record_len - meas_block_offset).min(rem_len);
             let bytes_filled = measurements
                 .measurement_block(
+                    evidence,
                     self.asym_algo,
                     self.meas_op,
                     raw_bitstream_requested,
@@ -197,23 +200,26 @@ impl MeasurementsResponse {
 
     async fn response_fixed_fields(
         &self,
+        evidence: &dyn SpdmEvidence,
         measurements: &mut SpdmMeasurements,
     ) -> CommandResult<[u8; RESPONSE_FIXED_FIELDS_SIZE]> {
         let mut fixed_rsp_fields = [0u8; RESPONSE_FIXED_FIELDS_SIZE];
         let mut fixed_rsp_buf = MessageBuf::new(&mut fixed_rsp_fields);
         _ = self
-            .encode_response_fixed_fields(&mut fixed_rsp_buf, measurements)
+            .encode_response_fixed_fields(evidence, &mut fixed_rsp_buf, measurements)
             .await?;
         Ok(fixed_rsp_fields)
     }
 
     async fn encode_response_fixed_fields(
         &self,
+        evidence: &dyn SpdmEvidence,
         buf: &mut MessageBuf<'_>,
         measurements: &mut SpdmMeasurements,
     ) -> CommandResult<usize> {
         let measurement_record_size = measurements
             .measurement_block_size(
+                evidence,
                 self.asym_algo,
                 self.meas_op,
                 self.req_attr.raw_bitstream_requested() == 1,
@@ -364,14 +370,14 @@ impl MeasurementsResponse {
         Ok(signature.len())
     }
 
-    async fn response_size(&self, measurements: &mut SpdmMeasurements) -> CommandResult<usize> {
+    async fn response_size(&self, evidence: &dyn SpdmEvidence, measurements: &mut SpdmMeasurements) -> CommandResult<usize> {
         // Calculate the size of the response based on the request attributes
         let mut rsp_size = RESPONSE_FIXED_FIELDS_SIZE;
 
         if self.meas_op > 0 {
             // return the size of a measurement block or all measurement blocks
             rsp_size += measurements
-                .measurement_block_size(self.asym_algo, self.meas_op, false)
+                .measurement_block_size(evidence, self.asym_algo, self.meas_op, false)
                 .await
                 .map_err(|e| (false, CommandError::Measurement(e)))?;
         };
@@ -465,7 +471,7 @@ pub(crate) async fn generate_measurements_response<'a>(
     rsp_ctx: MeasurementsResponse,
     rsp: &mut MessageBuf<'a>,
 ) -> CommandResult<()> {
-    let rsp_len = rsp_ctx.response_size(&mut ctx.measurements).await?;
+    let rsp_len = rsp_ctx.response_size(ctx.evidence, &mut ctx.measurements).await?;
 
     if rsp_len > ctx.min_data_transfer_size() {
         // If the response is larger than the minimum data transfer size, use chunked response
@@ -484,6 +490,7 @@ pub(crate) async fn generate_measurements_response<'a>(
             .get_chunk(
                 ctx.hash,
                 ctx.rng,
+                ctx.evidence,
                 &mut ctx.measurements,
                 &mut ctx.transcript_mgr,
                 ctx.device_certs_store,

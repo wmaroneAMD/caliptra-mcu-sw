@@ -224,7 +224,7 @@ async fn encode_measurement_summary_hash<'a>(
 ) -> CommandResult<usize> {
     let mut meas_summary_hash = [0u8; SHA384_HASH_SIZE];
     ctx.measurements
-        .measurement_summary_hash(ctx.hash, asym_algo, meas_summary_hash_type, &mut meas_summary_hash)
+        .measurement_summary_hash(ctx.evidence, ctx.hash, asym_algo, meas_summary_hash_type, &mut meas_summary_hash)
         .await
         .map_err(|e| (false, CommandError::Measurement(e)))?;
 

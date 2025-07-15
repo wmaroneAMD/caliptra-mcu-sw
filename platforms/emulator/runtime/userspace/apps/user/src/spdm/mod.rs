@@ -21,8 +21,10 @@ use spdm_lib::transport::mctp::MctpTransport;
 
 use spdm_lib::platform::hash::{SpdmHash, SpdmHashResult, SpdmHashAlgoType, SpdmHashError};
 use spdm_lib::platform::rng::{SpdmRng, SpdmRngError, SpdmRngResult};
+use spdm_lib::platform::evidence::{SpdmEvidence, SpdmEvidenceError, SpdmEvidenceResult};
 use libapi_caliptra::crypto::hash::{HashAlgoType, HashContext};
 use libapi_caliptra::crypto::rng::Rng;
+use libapi_caliptra::evidence::Evidence;
 
 extern crate alloc;
 use alloc::boxed::Box;
@@ -43,6 +45,33 @@ static HASH_PRIORITY_TABLE: &[BaseHashAlgoType] = &[
     BaseHashAlgoType::TpmAlgSha384,
     BaseHashAlgoType::TpmAlgSha256,
 ];
+
+struct LocalEvidence;
+
+impl LocalEvidence {
+    fn new() -> Self {
+        LocalEvidence {}
+    }
+
+    fn translate_error(e: CaliptraApiError) -> SpdmEvidenceError {
+        match e {
+            _ => SpdmEvidenceError::InvalidEvidence, // Just map everything to this for now
+        }
+    }
+}
+
+#[async_trait]
+impl SpdmEvidence for LocalEvidence {
+    async fn pcr_quote(&self, buffer: &mut [u8], with_pqc_sig: bool) -> SpdmEvidenceResult<usize> {
+        Evidence::pcr_quote(buffer, with_pqc_sig)
+            .await
+            .map_err(|e| Self::translate_error(e))
+    }
+
+    fn pcr_quote_size(&self, with_pqc_sig: bool) -> SpdmEvidenceResult<usize> {
+        Ok(Evidence::pcr_quote_size(with_pqc_sig))
+    }
+}
 
 struct LocalRng;
 
@@ -196,6 +225,7 @@ async fn spdm_mctp_responder() {
     let mut m1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
     let mut l1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
     let mut rng = LocalRng::new();
+    let mut evidence = LocalEvidence::new();
 
     let max_mctp_spdm_msg_size =
         (MAX_RESPONDER_BUF_SIZE - mctp_spdm_transport.header_size()) as u32;
@@ -219,6 +249,7 @@ async fn spdm_mctp_responder() {
         &mut m1_hash,
         &mut l1_hash,
         &mut rng,
+        &mut evidence,
     ) {
         Ok(ctx) => ctx,
         Err(e) => {
@@ -255,6 +286,8 @@ async fn spdm_doe_responder() {
     let mut spdm_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
     let mut m1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
     let mut l1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
+    let mut rng = LocalRng::new();
+    let mut evidence = LocalEvidence::new();
 
     let max_doe_spdm_msg_size = (MAX_RESPONDER_BUF_SIZE - doe_spdm_transport.header_size()) as u32;
 
@@ -276,6 +309,8 @@ async fn spdm_doe_responder() {
         &mut spdm_hash,
         &mut m1_hash,
         &mut l1_hash,
+        &mut rng,
+        &mut evidence,
     ) {
         Ok(ctx) => ctx,
         Err(e) => {
