@@ -2,7 +2,6 @@
 
 use crate::protocol::*;
 use crate::platform::hash::{SpdmHash, SpdmHashError};
-use libapi_caliptra::error::CaliptraApiError;
 
 pub const NONCE_LEN: usize = 32;
 
@@ -20,7 +19,6 @@ pub enum SignCtxError {
     BufferTooSmall,
     InvalidSignCtxString,
     Platform(SpdmHashError),
-    CaliptraApi(CaliptraApiError),
 }
 
 pub type SignatureCtxResult<T> = Result<T, SignCtxError>;

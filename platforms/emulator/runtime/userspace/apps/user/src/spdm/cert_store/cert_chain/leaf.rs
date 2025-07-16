@@ -102,7 +102,7 @@ impl DpeLeafCertBuf {
         let size = cert_ctx
             .certify_key(&mut self.buffer, Some(&DPE_LEAF_CERT_LABEL), None, None)
             .await
-            .map_err(CertStoreError::CaliptraApi)?;
+            .map_err(|_| CertStoreError::PlatformError)?;
 
         if size > DPE_LEAF_CERT_SIZE {
             return Err(CertStoreError::BufferTooSmall);
@@ -139,7 +139,7 @@ impl DpeLeafCertBuf {
         cert_ctx
             .sign(Some(&DPE_LEAF_CERT_LABEL), hash, signature)
             .await
-            .map_err(CertStoreError::CaliptraApi)?;
+            .map_err(|_| CertStoreError::PlatformError)?;
         Ok(())
     }
 }

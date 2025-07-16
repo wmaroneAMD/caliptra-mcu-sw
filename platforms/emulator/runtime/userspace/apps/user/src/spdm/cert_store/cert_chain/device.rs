@@ -32,7 +32,7 @@ impl DpeCertChain {
         CertContext::new()
             .cert_chain_chunk(offset, cert_portion)
             .await
-            .map_err(CertStoreError::CaliptraApi)
+            .map_err(|_| CertStoreError::PlatformError)
     }
 
     async fn cert_chain_offset(&self) -> usize {

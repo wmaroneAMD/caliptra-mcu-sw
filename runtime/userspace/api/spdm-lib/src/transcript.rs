@@ -2,14 +2,12 @@
 
 use crate::protocol::{SpdmVersion, SHA384_HASH_SIZE};
 use crate::platform::hash::{SpdmHash, SpdmHashError};
-use libapi_caliptra::error::CaliptraApiError;
 
 #[derive(Debug, PartialEq)]
 pub enum TranscriptError {
     BufferOverflow,
     InvalidState,
     Hash(SpdmHashError),
-    CaliptraApi(CaliptraApiError),
 }
 
 pub type TranscriptResult<T> = Result<T, TranscriptError>;

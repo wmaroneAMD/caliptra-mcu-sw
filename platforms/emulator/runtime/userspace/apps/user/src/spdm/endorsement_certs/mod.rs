@@ -36,7 +36,7 @@ async fn populate_idev_cert() -> CertStoreResult<()> {
     {
         match e {
             CaliptraApiError::MailboxBusy => continue, // Retry if the mailbox is busy
-            _ => Err(CertStoreError::CaliptraApi(e))?,
+            _ => Err(CertStoreError::PlatformError)?,
         }
     }
 
@@ -66,7 +66,7 @@ impl EndorsementCertChain<'_> {
         {
             match e {
                 CaliptraApiError::MailboxBusy => continue, // Retry if the mailbox is busy
-                _ => Err(CertStoreError::CaliptraApi(e))?,
+                _ => Err(CertStoreError::PlatformError)?,
             }
         }
         Ok(Self {
