@@ -3,9 +3,15 @@
 // MCTP Transport Implementation
 
 extern crate alloc;
+<<<<<<<< HEAD:runtime/userspace/api/spdm-lib/src/transport/mctp.rs
 use crate::codec::MessageBuf;
 use crate::codec::{Codec, CommonCodec, DataKind};
 use crate::transport::common::{SpdmTransport, TransportError, TransportResult};
+========
+use spdm_lib::codec::MessageBuf;
+use spdm_lib::codec::{Codec, CommonCodec, DataKind};
+use spdm_lib::platform::transport::{SpdmTransport, TransportResult, TransportError};
+>>>>>>>> 9e595de2 (Funcional Commit 8):platforms/emulator/runtime/userspace/apps/user/src/spdm/mctp.rs
 use alloc::boxed::Box;
 use async_trait::async_trait;
 use bitfield::bitfield;

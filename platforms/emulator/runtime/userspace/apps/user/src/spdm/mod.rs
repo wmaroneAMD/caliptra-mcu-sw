@@ -1,9 +1,15 @@
 // Licensed under the Apache-2.0 license
 
+<<<<<<< HEAD
 mod cert_store;
 mod device_cert_store;
 mod endorsement_certs;
 
+=======
+mod config;
+mod dev_cert_store;
+mod mctp;
+>>>>>>> 9e595de2 (Funcional Commit 8)
 use core::fmt::Write;
 use device_cert_store::{initialize_cert_store, SharedCertStore};
 use embassy_executor::Spawner;
@@ -15,9 +21,14 @@ use libtock_console::Console;
 use spdm_lib::codec::MessageBuf;
 use spdm_lib::context::SpdmContext;
 use spdm_lib::protocol::*;
+<<<<<<< HEAD
 use spdm_lib::transport::common::SpdmTransport;
 use spdm_lib::transport::doe::DoeTransport;
 use spdm_lib::transport::mctp::MctpTransport;
+=======
+use mctp::MctpTransport;
+use spdm_lib::platform::transport::SpdmTransport;
+>>>>>>> 9e595de2 (Funcional Commit 8)
 use spdm_lib::platform::hash::{SpdmHash, SpdmHashResult, SpdmHashAlgoType, SpdmHashError};
 use spdm_lib::platform::rng::{SpdmRng, SpdmRngError, SpdmRngResult};
 use spdm_lib::platform::evidence::{SpdmEvidence, SpdmEvidenceError, SpdmEvidenceResult};
