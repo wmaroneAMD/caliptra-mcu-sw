@@ -4,7 +4,6 @@ use crate::protocol::{algorithms::AsymAlgo, MeasurementSpecification, SHA384_HAS
 use crate::platform::hash::{SpdmHash, SpdmHashError};
 use crate::platform::evidence::{SpdmEvidence, SpdmEvidenceError};
 use bitfield::bitfield;
-use libapi_caliptra::error::CaliptraApiError;
 use zerocopy::{FromBytes, Immutable, IntoBytes};
 
 pub const SPDM_MAX_MEASUREMENT_RECORD_SIZE: u32 = 0xFFFFFF;
@@ -22,7 +21,6 @@ pub enum MeasurementsError {
     MeasurementSizeMismatch,
     Hash(SpdmHashError),
     Evidence(SpdmEvidenceError),
-    CaliptraApi(CaliptraApiError),
 }
 pub type MeasurementsResult<T> = Result<T, MeasurementsError>;
 

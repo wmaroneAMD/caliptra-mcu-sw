@@ -12,7 +12,6 @@ use crate::transcript::TranscriptError;
 use crate::platform::transport::TransportError;
 use crate::platform::hash::SpdmHashError;
 use crate::platform::evidence::SpdmEvidenceError;
-use libapi_caliptra::error::CaliptraApiError;
 
 #[derive(Debug)]
 pub enum SpdmError {
@@ -24,7 +23,6 @@ pub enum SpdmError {
     BufferTooSmall,
     UnsupportedRequest,
     CertStore(CertStoreError),
-    CaliptraApi(CaliptraApiError),
 }
 
 pub type SpdmResult<T> = Result<T, SpdmError>;
@@ -49,7 +47,6 @@ pub enum CommandError {
     Chunk(ChunkError),
     CertStore(CertStoreError),
     Platform(PlatformError),
-    CaliptraApi(CaliptraApiError),
     Transcript(TranscriptError),
     Measurement(MeasurementsError),
 }

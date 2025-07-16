@@ -106,7 +106,7 @@ impl DeviceCertChain<'_> {
         CertContext::new()
             .cert_chain_chunk(offset, cert_portion)
             .await
-            .map_err(CertStoreError::CaliptraApi)
+            .map_err(|_| CertStoreError::PlatformError)
     }
 
     fn read_root_cert_chain(
@@ -174,7 +174,7 @@ impl DeviceCertChain<'_> {
         let size = cert_ctx
             .certify_key(&mut cert, Some(&key_label), None, None)
             .await
-            .map_err(CertStoreError::CaliptraApi)?;
+            .map_err(|_|CertStoreError::PlatformError)?;
         let cert_buf = CertBuf { buf: cert, size };
         self.leaf_cert = Some(cert_buf);
         Ok(size)
@@ -194,7 +194,7 @@ impl DeviceCertChain<'_> {
         cert_ctx
             .sign(Some(&key_label), hash, signature)
             .await
-            .map_err(CertStoreError::CaliptraApi)?;
+            .map_err(|_| CertStoreError::PlatformError)?;
         Ok(())
     }
 

@@ -60,7 +60,7 @@ impl SpdmEvidence for LocalEvidence {
     }
 
     async fn pcr_quote_size(&self, with_pqc_sig: bool) -> SpdmEvidenceResult<usize> {
-        Ok(Evidence::pcr_quote_size(with_pqc_sig).await)
+        Ok(Evidence::pcr_quote_size(with_pqc_sig))
     }
 }
 
@@ -86,14 +86,13 @@ impl SpdmRng for LocalRng {
             .map_err(|e| Self::translate_error(e))
     }
 
-    async fn get_random_bytes(&mut self, buf: &mut [u8]) -> SpdmRngResult<()> {
+    async fn get_random_bytes(&mut self, _buf: &mut [u8]) -> SpdmRngResult<()> {
         Ok(())
     }
 }
 
 struct LocalHash {
     spdm_hash_algo: SpdmHashAlgoType,
-    local_hash_algo: HashAlgoType,
     ctx: HashContext,
 }
 
@@ -113,7 +112,6 @@ impl LocalHash {
         LocalHash {
             ctx: ctx,
             spdm_hash_algo: hash_algo,
-            local_hash_algo: algo
         }
     }
 

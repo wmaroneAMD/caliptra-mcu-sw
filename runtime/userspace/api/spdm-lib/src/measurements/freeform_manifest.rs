@@ -130,13 +130,9 @@ impl FreeformManifest {
     async fn refresh_measurement_record(&mut self, evidence: &dyn SpdmEvidence, asym_algo: AsymAlgo) -> MeasurementsResult<()> {
         let with_pqc_sig = asym_algo != AsymAlgo::EccP384;
         let measurement_record = &mut self.measurement_record;
-<<<<<<< HEAD
-        let measurement_value_size = Evidence::pcr_quote_size(with_pqc_sig);
-=======
         let measurement_value_size = evidence.pcr_quote_size(with_pqc_sig)
             .await
             .map_err(|e| MeasurementsError::Evidence(e))?;
->>>>>>> 6a8054a5 (Functional Commit 5)
         measurement_record.fill(0);
         let metadata = DmtfMeasurementBlockMetadata::new(
             SPDM_MEASUREMENT_MANIFEST_INDEX,
