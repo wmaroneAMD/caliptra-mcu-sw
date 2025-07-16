@@ -7,7 +7,6 @@ use crate::measurements::common::{
 use crate::protocol::{algorithms::AsymAlgo, SHA384_HASH_SIZE};
 use crate::platform::hash::SpdmHash;
 use crate::platform::evidence::{SpdmEvidence, SpdmEvidenceError, PCR_QUOTE_BUFFER_SIZE};
-use libapi_caliptra::mailbox_api::MAX_CRYPTO_MBOX_DATA_SIZE;
 use zerocopy::IntoBytes;
 
 const MAX_MEASUREMENT_RECORD_SIZE: usize =
@@ -112,7 +111,7 @@ impl FreeformManifest {
         let mut offset = 0;
 
         while offset < self.measurement_record.len() {
-            let chunk_size = MAX_CRYPTO_MBOX_DATA_SIZE.min(self.measurement_record.len() - offset);
+            let chunk_size = self.measurement_record.len() - offset;
 
             if offset == 0 {
                 hash_ctx

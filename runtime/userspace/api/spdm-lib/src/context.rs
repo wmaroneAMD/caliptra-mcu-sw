@@ -17,7 +17,7 @@ use crate::protocol::version::*;
 use crate::protocol::DeviceCapabilities;
 use crate::state::{ConnectionState, State};
 use crate::transcript::{TranscriptContext, TranscriptManager};
-use crate::transport::common::SpdmTransport;
+use crate::platform::transport::common::SpdmTransport;
 use crate::platform::hash::SpdmHash;
 use crate::platform::rng::SpdmRng;
 

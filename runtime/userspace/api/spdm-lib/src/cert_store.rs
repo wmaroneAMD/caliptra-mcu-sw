@@ -8,7 +8,6 @@ use crate::protocol::certs::{CertificateInfo, KeyUsageMask};
 use crate::protocol::SpdmCertChainHeader;
 use alloc::boxed::Box;
 use async_trait::async_trait;
-use libapi_caliptra::error::CaliptraApiError;
 
 pub const MAX_CERT_SLOTS_SUPPORTED: u8 = 2;
 pub const SPDM_CERT_CHAIN_METADATA_LEN: u16 =
@@ -27,15 +26,6 @@ pub enum CertStoreError {
     CertReadError,
     PlatformError,
 }
-
-impl From<CaliptraApiError> for CertStoreError {
-    fn from(_error: CaliptraApiError) -> Self {
-        // Map all CaliptraApiError variants to PlatformError for now
-        // This can be refined later to map specific errors appropriately
-        CertStoreError::PlatformError
-    }
-}
-
 pub type CertStoreResult<T> = Result<T, CertStoreError>;
 
 #[async_trait]
