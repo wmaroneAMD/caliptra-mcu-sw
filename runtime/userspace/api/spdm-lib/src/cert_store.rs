@@ -22,8 +22,17 @@ pub enum CertStoreError {
     BufferTooSmall,
     InvalidOffset,
     CertReadError,
-    CaliptraApi(CaliptraApiError),
+    PlatformError,
 }
+
+impl From<CaliptraApiError> for CertStoreError {
+    fn from(_error: CaliptraApiError) -> Self {
+        // Map all CaliptraApiError variants to PlatformError for now
+        // This can be refined later to map specific errors appropriately
+        CertStoreError::PlatformError
+    }
+}
+
 pub type CertStoreResult<T> = Result<T, CertStoreError>;
 
 #[async_trait]

@@ -1,41 +1,14 @@
 // Licensed under the Apache-2.0 license
 
 extern crate alloc;
-use crate::codec::MessageBuf;
-use crate::codec::{Codec, CodecError, CommonCodec, DataKind};
+use spdm_lib::codec::MessageBuf;
+use spdm_lib::codec::{Codec, CommonCodec, DataKind};
+use spdm_lib::platform::transport::{SpdmTransport, TransportResult, TransportError};
 use alloc::boxed::Box;
 use async_trait::async_trait;
 use bitfield::bitfield;
 use libsyscall_caliptra::mctp::{Mctp, MessageInfo};
 use zerocopy::{FromBytes, Immutable, IntoBytes};
-
-pub type TransportResult<T> = Result<T, TransportError>;
-
-#[async_trait]
-pub trait SpdmTransport {
-    async fn send_request<'a>(
-        &mut self,
-        dest_eid: u8,
-        req: &mut MessageBuf<'a>,
-    ) -> TransportResult<()>;
-    async fn receive_response<'a>(&mut self, rsp: &mut MessageBuf<'a>) -> TransportResult<()>;
-    async fn receive_request<'a>(&mut self, req: &mut MessageBuf<'a>) -> TransportResult<()>;
-    async fn send_response<'a>(&mut self, resp: &mut MessageBuf<'a>) -> TransportResult<()>;
-    fn max_message_size(&self) -> TransportResult<usize>;
-    fn header_size(&self) -> usize;
-}
-
-#[derive(Debug)]
-pub enum TransportError {
-    DriverError,
-    BufferTooSmall,
-    Codec(CodecError),
-    UnexpectedMessageType,
-    ReceiveError,
-    SendError,
-    ResponseNotExpected,
-    NoRequestInFlight,
-}
 
 // MCTP Transport Implementation
 

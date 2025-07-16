@@ -2,15 +2,28 @@
 
 mod config;
 mod dev_cert_store;
+mod mctp;
 use core::fmt::Write;
 use dev_cert_store::{DeviceCertChain, DeviceCertStore};
+use libapi_caliptra::error::CaliptraApiError;
 use libsyscall_caliptra::mctp::driver_num;
 use libsyscall_caliptra::DefaultSyscalls;
 use libtock_console::{Console, ConsoleWriter};
 use spdm_lib::codec::MessageBuf;
 use spdm_lib::context::SpdmContext;
 use spdm_lib::protocol::*;
-use spdm_lib::transport::{MctpTransport, SpdmTransport};
+use mctp::MctpTransport;
+use spdm_lib::platform::transport::SpdmTransport;
+use spdm_lib::platform::hash::{SpdmHash, SpdmHashResult, SpdmHashAlgoType, SpdmHashError};
+use spdm_lib::platform::rng::{SpdmRng, SpdmRngError, SpdmRngResult};
+use spdm_lib::platform::evidence::{SpdmEvidence, SpdmEvidenceError, SpdmEvidenceResult};
+use libapi_caliptra::crypto::hash::{HashAlgoType, HashContext};
+use libapi_caliptra::crypto::rng::Rng;
+use libapi_caliptra::evidence::Evidence;
+
+extern crate alloc;
+use alloc::boxed::Box;
+use async_trait::async_trait;
 
 // Caliptra supported SPDM versions
 const SPDM_VERSIONS: &[SpdmVersion] = &[SpdmVersion::V12, SpdmVersion::V13];
@@ -25,6 +38,139 @@ static HASH_PRIORITY_TABLE: &[BaseHashAlgoType] = &[
     BaseHashAlgoType::TpmAlgSha256,
 ];
 
+struct LocalEvidence;
+
+impl LocalEvidence {
+    fn new() -> Self {
+        LocalEvidence {}
+    }
+
+    fn translate_error(e: CaliptraApiError) -> SpdmEvidenceError {
+        match e {
+            _ => SpdmEvidenceError::InvalidEvidence, // Just map everything to this for now
+        }
+    }
+}
+
+#[async_trait]
+impl SpdmEvidence for LocalEvidence {
+    async fn pcr_quote(&self, buffer: &mut [u8], with_pqc_sig: bool) -> SpdmEvidenceResult<usize> {
+        Evidence::pcr_quote(buffer, with_pqc_sig)
+            .await
+            .map_err(|e| Self::translate_error(e))
+    }
+
+    async fn pcr_quote_size(&self, with_pqc_sig: bool) -> SpdmEvidenceResult<usize> {
+        Ok(Evidence::pcr_quote_size(with_pqc_sig))
+    }
+}
+
+struct LocalRng;
+
+impl LocalRng {
+    fn new() -> Self {
+        LocalRng {}
+    }
+
+    fn translate_error(e: CaliptraApiError) -> SpdmRngError {
+        match e {
+            _ => SpdmRngError::InvalidSize, // Just map everything to this for now
+        }
+    }
+}
+
+#[async_trait]
+impl SpdmRng for LocalRng {
+    async fn generate_random_number(&mut self, random_number: &mut [u8]) -> SpdmRngResult<()> {
+        Rng::generate_random_number(random_number)
+            .await
+            .map_err(|e| Self::translate_error(e))
+    }
+
+    async fn get_random_bytes(&mut self, _buf: &mut [u8]) -> SpdmRngResult<()> {
+        Ok(())
+    }
+}
+
+struct LocalHash {
+    spdm_hash_algo: SpdmHashAlgoType,
+    ctx: HashContext,
+}
+
+impl LocalHash { 
+
+    fn translate_algo(algo: SpdmHashAlgoType) -> HashAlgoType {
+        match algo {
+            SpdmHashAlgoType::SHA384 => HashAlgoType::SHA384,
+            SpdmHashAlgoType::SHA512 => HashAlgoType::SHA512,
+        }
+    }
+
+    fn new(hash_algo: SpdmHashAlgoType) -> Self {
+        let ctx = HashContext::new();
+        let algo = Self::translate_algo(hash_algo);
+
+        LocalHash {
+            ctx: ctx,
+            spdm_hash_algo: hash_algo,
+        }
+    }
+
+    fn translate_error(e: CaliptraApiError) -> SpdmHashError {
+        match e {
+            _ => SpdmHashError::PlatformError, // Just map everything to this for now
+        }
+    }
+}
+
+#[async_trait]
+impl SpdmHash for LocalHash {
+    async fn hash(&mut self, hash_algo: SpdmHashAlgoType, data: &[u8], hash: &mut [u8]) -> SpdmHashResult<()> {
+        self.ctx.init(Self::translate_algo(hash_algo), Some(data))
+            .await
+            .map_err(|e| LocalHash::translate_error(e))?;
+
+        self.ctx.update(data)
+            .await
+            .map_err(|e| LocalHash::translate_error(e))?;
+
+        self.ctx
+            .finalize(hash)
+            .await
+            .map_err(|e| LocalHash::translate_error(e))
+    }
+
+    async fn init(&mut self, hash_algo: SpdmHashAlgoType, data: Option<&[u8]>) -> SpdmHashResult<()> {
+        self.ctx.init(Self::translate_algo(hash_algo), data)
+            .await
+            .map_err(|e| LocalHash::translate_error(e))
+    }
+
+    async fn update(&mut self, data: &[u8]) -> SpdmHashResult<()> {
+        self.ctx.update(data)
+            .await
+            .map_err(|e| LocalHash::translate_error(e))
+    }
+
+    async fn finalize(&mut self, hash: &mut [u8]) -> SpdmHashResult<()> {
+        self.ctx.finalize(hash)
+            .await
+            .map_err(|e| LocalHash::translate_error(e))?;
+
+        self.ctx = HashContext::new();
+
+        Ok(())
+    }
+
+    fn reset(&mut self) {
+        self.ctx = HashContext::new();
+    }
+
+    fn algo(&self) -> SpdmHashAlgoType {
+        self.spdm_hash_algo
+    }
+}
+
 #[embassy_executor::task]
 pub(crate) async fn spdm_task() {
     let mut console_writer = Console::<DefaultSyscalls>::writer();
@@ -38,6 +184,13 @@ pub(crate) async fn spdm_task() {
 }
 
 async fn spdm_loop(raw_buffer: &mut [u8], cw: &mut ConsoleWriter<DefaultSyscalls>) {
+
+    let mut spdm_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
+    let mut m1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
+    let mut l1_hash = LocalHash::new(SpdmHashAlgoType::SHA384);
+    let mut rng = LocalRng::new();
+    let mut evidence = LocalEvidence::new();
+
     let mut mctp_spdm_transport: MctpTransport = MctpTransport::new(driver_num::MCTP_SPDM);
 
     let max_mctp_spdm_msg_size =
@@ -83,6 +236,11 @@ async fn spdm_loop(raw_buffer: &mut [u8], cw: &mut ConsoleWriter<DefaultSyscalls
         local_capabilities,
         local_algorithms,
         &mut device_cert_store,
+        &mut spdm_hash,
+        &mut m1_hash,
+        &mut l1_hash,
+        &mut rng,
+        &mut evidence,
     ) {
         Ok(ctx) => ctx,
         Err(e) => {
