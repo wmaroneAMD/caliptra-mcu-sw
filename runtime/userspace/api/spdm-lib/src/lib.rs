@@ -18,9 +18,6 @@ pub mod context;
 // Spdm responder state
 pub mod state;
 
-// Transport layer handling
-pub mod transport;
-
 // Device certificate management
 pub mod cert_store;
 

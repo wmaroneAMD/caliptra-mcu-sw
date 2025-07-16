@@ -2,6 +2,7 @@
 
 mod config;
 mod dev_cert_store;
+mod mctp;
 use core::fmt::Write;
 use dev_cert_store::{DeviceCertChain, DeviceCertStore};
 use libapi_caliptra::error::CaliptraApiError;
@@ -11,7 +12,7 @@ use libtock_console::{Console, ConsoleWriter};
 use spdm_lib::codec::MessageBuf;
 use spdm_lib::context::SpdmContext;
 use spdm_lib::protocol::*;
-use spdm_lib::transport::MctpTransport;
+use mctp::MctpTransport;
 use spdm_lib::platform::transport::SpdmTransport;
 use spdm_lib::platform::hash::{SpdmHash, SpdmHashResult, SpdmHashAlgoType, SpdmHashError};
 use spdm_lib::platform::rng::{SpdmRng, SpdmRngError, SpdmRngResult};

@@ -1,9 +1,9 @@
 // Licensed under the Apache-2.0 license
 
 extern crate alloc;
-use crate::codec::MessageBuf;
-use crate::codec::{Codec, CommonCodec, DataKind};
-use crate::platform::transport::{SpdmTransport, TransportResult, TransportError};
+use spdm_lib::codec::MessageBuf;
+use spdm_lib::codec::{Codec, CommonCodec, DataKind};
+use spdm_lib::platform::transport::{SpdmTransport, TransportResult, TransportError};
 use alloc::boxed::Box;
 use async_trait::async_trait;
 use bitfield::bitfield;
