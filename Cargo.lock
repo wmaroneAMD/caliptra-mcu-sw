@@ -3910,6 +3910,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "tests-spdm-responder-validator"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "flash-image",
+ "mcu-builder",
+ "mcu-config",
+ "mcu-config-emulator",
+ "pldm-fw-pkg",
+ "tempfile",
+ "uuid",
+ "zerocopy",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

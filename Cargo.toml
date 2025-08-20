@@ -63,6 +63,7 @@ members = [
     "runtime/userspace/syscall",
     "tests/hello",
     "tests/integration",
+    "tests/spdm_responder_validator",
     "xtask",
 ]
 resolver = "2"
