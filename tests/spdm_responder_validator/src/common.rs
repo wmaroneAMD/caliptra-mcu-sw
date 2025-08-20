@@ -1,6 +1,6 @@
 // Licensed under the Apache-2.0 license
 
-use spdm_responder_validator::transport::Transport;
+use crate::transport::Transport;
 use crate::EMULATOR_RUNNING;
 use std::fs::File;
 use std::io::{self, ErrorKind, Read, Write};

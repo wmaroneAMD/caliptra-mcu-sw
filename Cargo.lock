@@ -3914,10 +3914,14 @@ name = "tests-spdm-responder-validator"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "emulator",
+ "emulator-periph",
  "flash-image",
  "mcu-builder",
  "mcu-config",
  "mcu-config-emulator",
+ "mcu-hw-model",
+ "mcu-rom-common",
  "pldm-fw-pkg",
  "tempfile",
  "uuid",

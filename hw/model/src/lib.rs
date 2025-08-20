@@ -36,7 +36,7 @@ mod model_fpga_realtime;
 mod otp_provision;
 mod output;
 mod vmem;
-mod xi3c;
+pub mod xi3c;
 
 pub enum ShaAccMode {
     Sha384Stream,

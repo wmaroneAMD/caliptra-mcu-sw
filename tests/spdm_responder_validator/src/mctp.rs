@@ -1,10 +1,10 @@
 // Licensed under the Apache-2.0 license
 
-use crate::tests::mctp_util::common::MctpUtil;
-use crate::tests::spdm_responder_validator::common::{
+use emulator::tests::mctp_util::common::MctpUtil;
+use crate::common::{
     execute_spdm_validator, SpdmValidatorRunner, SERVER_LISTENING,
 };
-use crate::tests::spdm_responder_validator::transport::{
+use crate::transport::{
     Transport, MAX_CMD_TIMEOUT_SECONDS, SOCKET_TRANSPORT_TYPE_MCTP,
 };
 use crate::{wait_for_runtime_start, EMULATOR_RUNNING};
