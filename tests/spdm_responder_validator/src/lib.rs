@@ -33,7 +33,7 @@ mod test {
 
     use crate::mctp::run_mctp_spdm_conformance_test;
 
-    fn process_connection(i3c: , stream: &mut TcpStream) {
+    fn process_connection)(stream: &mut TcpStream) {
         // Handle the connection
         println!("New connection established: {:?}", stream.peer_addr());
 

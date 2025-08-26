@@ -16,13 +16,15 @@ use emulator_bmc::Bmc;
 use registers_generated::i3c::bits::{DeviceStatus0, StbyCrDeviceAddr, StbyCrVirtDeviceAddr};
 use registers_generated::mci::bits::Go::Go;
 use registers_generated::{fuses, i3c};
-use std::io::Write;
+use std::io;
+use std::io::{Read, Write};
 use std::marker::PhantomData;
-use std::net::{SocketAddr, TcpStream};
+use std::net::{SocketAddr, TcpStream, TcpListener};
 use std::path::Path;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
+use std::cell::RefCell;
 use std::thread;
 use std::time::{Duration, Instant};
 use tock_registers::interfaces::{ReadWriteable, Readable, Writeable};
@@ -44,6 +46,12 @@ const OTP_MAPPING: (usize, usize) = (1, 4);
 const ITRNG_DIVISOR: u32 = 400;
 const DEFAULT_AXI_PAUSER: u32 = 0xcccc_cccc;
 const OTP_SIZE: usize = 16384;
+
+// I3C command buffer size
+const I3C_PEC_SIZE: usize = 1;
+const MCTP_HEADER_SIZE: usize = 4;
+const MCTP_PAYLOAD_MIN: usize = 64;
+const MAX_BUFFER_SIZE: usize = MCTP_HEADER_SIZE + MCTP_PAYLOAD_MIN + I3C_PEC_SIZE;
 
 // ITRNG FIFO stores 1024 DW and outputs 4 bits at a time to Caliptra.
 const FPGA_ITRNG_FIFO_SIZE: usize = 1024;
@@ -104,9 +112,13 @@ pub struct ModelFpgaRealtime {
     otp_mem_backdoor: *mut u8,
     otp_init: Vec<u8>,
     mci: Mci,
+
     i3c_mmio: *mut u32,
     i3c_controller_mmio: *mut u32,
-    i3c_controller: xi3c::Controller,
+    i3c_controller: Arc<RefCell<xi3c::Controller>>,
+    i3c_thread: Option<thread::JoinHandle<()>>,
+    i3c_thread_exit_flag: Arc<AtomicBool>,
+
     otp_mmio: *mut u32,
     lc_mmio: *mut u32,
 
@@ -328,10 +340,11 @@ impl ModelFpgaRealtime {
     }
 
     pub fn configure_i3c_controller(&mut self) {
+        let i3c_ctrl = self.i3c_controller.borrow_mut();
         println!("I3C controller initializing");
         println!(
             "XI3C HW version = {:x}",
-            self.i3c_controller.regs().version.get()
+            i3c_ctrl.regs().version.get()
         );
         let xi3c_config = xi3c::Config {
             device_id: 0,
@@ -346,11 +359,87 @@ impl ModelFpgaRealtime {
             known_static_addrs: vec![0x3a, 0x3b],
         };
 
-        self.i3c_controller.set_s_clk(199_999_000, 12_500_000, 1);
-        self.i3c_controller
+        i3c_ctrl.set_s_clk(199_999_000, 12_500_000, 1);
+        i3c_ctrl
             .cfg_initialize(&xi3c_config, self.i3c_controller_mmio as usize)
             .unwrap();
         println!("I3C controller finished initializing");
+    }
+
+    fn i3c_generic_send(addr: u8, data: &[u8], bytes: usize, i3c_controller: Arc<RefCell<xi3c::Controller>>) {
+        let mut i3c = i3c_controller.borrow_mut();
+        let cmd = xi3c::Command {
+            cmd_type: 1,
+            target_addr: addr,
+            byte_count: bytes as u16,
+            pec: 1,
+            ..Default::default()
+        };
+        i3c.master_send_polled(&mut cmd, &data[..bytes], bytes as u16);
+    }
+
+    fn i3c_generic_receive(running: Option<Arc<AtomicBool>>, i3c_controller: Arc<RefCell<xi3c::Controller>>) -> Vec<u8> {
+        let mut i3c = i3c_controller.borrow_mut(); 
+
+        let mut cmd = xi3c::Command {
+            cmd_type: 1,
+            byte_count: 4,
+            ..Default::default()
+        };
+
+        let mut buf: Vec<u8> = Vec::new();
+        let recv_buffer = match i3c.master_recv_polled(running, &mut cmd, 4) {
+            Ok(recv_buffer) => {
+                buf.extend_from_slice(&recv_buffer);
+            }
+            Err(err) => {
+                println!("No ack received for assigning address");
+                Vec::<u8>::new();
+            }
+        };
+
+        Vec::<u8>::new()
+    }
+
+    fn i3c_thread_tcp_map_fn(
+        wrapper: Arc<Wrapper>,
+        i3c_controller: Arc<RefCell<xi3c::Controller>>,
+        i3c_address: u8,
+        running: Arc<AtomicBool>,
+    ) {
+        let mut req_buffer = vec![0u8; MAX_BUFFER_SIZE];
+
+        let tgt_addr = [SocketAddr::from(([127, 0, 0, 1], 24042))];
+
+        let listener = TcpListener::bind(&tgt_addr[..]).expect("Could not bind to the SPDM listerner port");
+
+        while running.load(Ordering::Relaxed) {
+            match listener.accept() {
+                Ok((stream, addr)) => {
+                    println!("New connection accepted: {}", addr);
+                    stream.set_nonblocking(true);
+                    let mut buf: Vec<u8> = Vec::new();
+                    loop {
+                        match stream.read(&mut req_buffer[..MAX_BUFFER_SIZE]) {
+                            Ok(0) => { break; }
+                            Ok(n) => {
+                                buf.extend_from_slice(&req_buffer[..n]);
+                            }
+                            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                                let bytes: &[u8] = &buf;
+                                ModelFpgaRealtime::i3c_generic_send(i3c_address, bytes, bytes.len(), i3c_controller);
+                            }
+                        }
+                    }   
+
+                    let b = ModelFpgaRealtime::i3c_generic_receive(Some(running), i3c_controller);
+                    stream.write(&b);
+                }    
+                Err(e) => {
+                    eprintln!("Error accepting connection: {}", e);
+                }
+            }
+        }
     }
 
     pub fn start_recovery_bmc(&mut self) {
@@ -758,6 +847,7 @@ impl ModelFpgaRealtime {
         );
         match self
             .i3c_controller
+            .borrow_mut()
             .master_send_polled(&mut cmd, payload, payload.len() as u16)
         {
             Ok(_) => {
@@ -796,8 +886,9 @@ impl ModelFpgaRealtime {
 
         let recovery_command_code = Self::command_code_to_u8(command);
 
-        if self
-            .i3c_controller
+        let i3c_ref = self.i3c_controller.borrow_mut();
+
+        if i3c_ref
             .master_send_polled(&mut cmd, &[recovery_command_code], 1)
             .is_err()
         {
@@ -812,13 +903,12 @@ impl ModelFpgaRealtime {
         cmd.pec = 0;
         cmd.cmd_type = 1;
 
-        self.i3c_controller
+        i3c_ref
             .master_recv(&mut cmd, len_range.0 + 2)
             .expect("Failed to receive ack from target");
 
         // read in the length, lsb then msb
-        let resp = self
-            .i3c_controller
+        let resp = i3c_ref
             .master_recv_finish(
                 Some(self.realtime_thread_exit_flag.clone()),
                 &cmd,
@@ -868,7 +958,7 @@ impl ModelFpgaRealtime {
         data.extend_from_slice(payload);
 
         assert!(
-            self.i3c_controller
+            self.i3c_controller.borrow_mut()
                 .master_send_polled(&mut cmd, &data, data.len() as u16)
                 .is_ok(),
             "Failed to ack write message sent to target"
@@ -1002,7 +1092,19 @@ impl McuHwModel for ModelFpgaRealtime {
             )
         }));
 
-        let i3c_controller = xi3c::Controller::new(i3c_controller_mmio);
+        let i3c_controller: Arc<RefCell<xi3c::Controller>> = Arc::new(RefCell::new(xi3c::Controller::new(i3c_controller_mmio)));
+
+
+        let i3c_thread_exit_flag = Arc::new(AtomicBool::new(true));
+
+        let i3c_thread = Some(std::thread::spawn(move || {
+            Self::i3c_thread_tcp_map_fn(
+                wrapper.clone(),
+                i3c_controller.clone(),
+                0x7c,
+                i3c_thread_exit_flag,
+            )
+        }));
 
         // For now, we copy the runtime directly into the SRAM
         let mut mcu_fw = params.mcu_firmware.to_vec();
@@ -1038,6 +1140,8 @@ impl McuHwModel for ModelFpgaRealtime {
             i3c_mmio,
             i3c_controller_mmio,
             i3c_controller,
+            i3c_thread,
+            i3c_thread_exit_flag,
             otp_init: params.otp_memory.map(|m| m.to_vec()).unwrap_or_default(),
             realtime_thread,
             realtime_thread_exit_flag,
@@ -1057,6 +1161,8 @@ impl McuHwModel for ModelFpgaRealtime {
             recovery_ctrl_len: 0,
             openocd: None,
         };
+
+        m.configure_i3c_controller();
 
         // Set generic input wires.
         let input_wires = [0, (!params.uds_granularity_32 as u32) << 31];
@@ -1416,7 +1522,12 @@ impl Drop for ModelFpgaRealtime {
             .store(false, Ordering::Relaxed);
         self.realtime_thread.take().unwrap().join().unwrap();
         self.close_openocd();
-        self.i3c_controller.off();
+
+        if self.i3c_thread_exit_flag == false {
+            self.i3c_thread_exit_flag.store(false, Ordering::Relaxed);
+            self.i3c_controller.borrow_mut().off();
+        }
+        self.i3c_thread.take().unwrap().join().unwrap();
 
         self.set_generic_input_wires(&[0, 0]);
         self.set_mcu_generic_input_wires(&[0, 0]);

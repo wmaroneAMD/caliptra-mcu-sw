@@ -9,4 +9,4 @@
 mod controller;
 
 #[allow(unused)]
-pub use controller::{Ccc, Command, Config, Controller, XI3c};
+pub use controller::{Ccc, Command, Config, Controller, XI3c, XI3C_BROADCAST_ADDRESS};
