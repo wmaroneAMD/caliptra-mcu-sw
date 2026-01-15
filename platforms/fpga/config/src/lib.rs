@@ -8,7 +8,7 @@ use mcu_config::{McuMemoryMap, McuStraps, MemoryRegionType};
 pub const FPGA_MEMORY_MAP: McuMemoryMap = McuMemoryMap {
     rom_offset: 0xb004_0000,
     rom_size: 128 * 1024,
-    rom_stack_size: 0x2e00,
+    rom_stack_size: 0x2d00,
     rom_estack_size: 0x200,
     rom_properties: MemoryRegionType::MEMORY,
 
@@ -52,6 +52,8 @@ pub const FPGA_MCU_STRAPS: McuStraps = McuStraps {
     i3c_static_addr: 0x3a,
     axi_user0: 0x1,
     axi_user1: 0x2,
+    mcu_mbox0_axi_users: [1, 2, 0, 0, 0],
+    mcu_mbox1_axi_users: [1, 2, 0, 0, 0],
     cptra_wdt_cfg0: 200_000_000,
     cptra_wdt_cfg1: 200_000_000,
     mcu_wdt_cfg0: 800_000_000, // the FPGA is slower to boot
