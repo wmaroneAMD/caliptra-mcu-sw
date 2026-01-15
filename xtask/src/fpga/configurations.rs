@@ -7,8 +7,8 @@ use mcu_builder::{AllBuildArgs, ImageCfg, PROJECT_ROOT};
 use super::{
     run_command, run_command_with_output,
     utils::{
-        build_base_docker_command, caliptra_sw_workspace_root, download_bitstream_pdi, rsync_file,
-        run_test_suite,
+        build_base_docker_command, build_caliptra_firmware, caliptra_sw_workspace_root,
+        download_bitstream_pdi, rsync_file, run_test_suite,
     },
     ActionHandler, BuildArgs, BuildTestArgs, TestArgs,
 };
@@ -194,10 +194,15 @@ impl<'a> ActionHandler<'a> for Subsystem {
         Ok(())
     }
 
-    fn build_test(&self, _args: &'a BuildTestArgs<'a>) -> Result<()> {
+    fn build_test(&self, args: &'a BuildTestArgs<'a>) -> Result<()> {
         let mut base_cmd = build_base_docker_command()?;
+        let package_filter_set = if let Some(package_filter) = args.package_filter {
+            format!("-E '{package_filter}'")
+        } else {
+            String::new()
+        };
         base_cmd.arg(
-                "(cd /work-dir && CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc cargo nextest archive --features=fpga_realtime --target=aarch64-unknown-linux-gnu --archive-file=/work-dir/caliptra-test-binaries.tar.zst --target-dir cross-target/)"
+                format!("(cd /work-dir && CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc cargo nextest archive --features=fpga_realtime {package_filter_set} --target=aarch64-unknown-linux-gnu --archive-file=/work-dir/caliptra-test-binaries.tar.zst --target-dir cross-target/)")
             );
         base_cmd.status().context("failed to cross compile tests")?;
         if let Some(target_host) = &self.target_host {
@@ -281,19 +286,11 @@ impl<'a> ActionHandler<'a> for CoreOnSubsystem {
         Ok(())
     }
     fn build(&self, args: &'a BuildArgs<'a>) -> Result<()> {
-        run_command(
-            None,
-            "mkdir -p /tmp/caliptra-test-firmware/caliptra-test-firmware",
-        )?;
         let caliptra_sw = caliptra_sw_workspace_root();
-        // Skip building Caliptra binaries when the MCU flag is set.
-        if !args.mcu {
-            run_command(
-                        None,
-                        &format!("(cd {} && cargo run --release -p caliptra-builder -- --all_elfs /tmp/caliptra-test-firmware)", caliptra_sw.display()),
-                    )?;
-        }
         let rom_path = mcu_builder::rom_build(Some("fpga"), "core_test")?;
+        if !args.mcu {
+            build_caliptra_firmware(&caliptra_sw, args.fw_id.as_deref())?;
+        }
         if let Some(target_host) = &self.target_host {
             rsync_file(
                 target_host,
@@ -306,12 +303,17 @@ impl<'a> ActionHandler<'a> for CoreOnSubsystem {
         Ok(())
     }
 
-    fn build_test(&self, _args: &'a BuildTestArgs<'a>) -> Result<()> {
+    fn build_test(&self, args: &'a BuildTestArgs<'a>) -> Result<()> {
         let caliptra_sw = caliptra_sw_workspace_root();
         let base_name = caliptra_sw.file_name().unwrap().to_str().unwrap();
+        let package_filter_set = if let Some(package_filter) = args.package_filter {
+            format!("-E '{package_filter}'")
+        } else {
+            String::new()
+        };
         let mut base_cmd = build_base_docker_command()?;
         base_cmd.arg(
-                format!("(cd /{} && CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc cargo nextest archive --features=fpga_subsystem,itrng --target=aarch64-unknown-linux-gnu --archive-file=/work-dir/caliptra-test-binaries.tar.zst --target-dir cross-target/)"
+                format!("(cd /{} && CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc cargo nextest archive --features=fpga_subsystem,itrng,ocp-lock {package_filter_set} --target=aarch64-unknown-linux-gnu --archive-file=/work-dir/caliptra-test-binaries.tar.zst --target-dir cross-target/)"
             , base_name));
         base_cmd.status().context("failed to cross compile tests")?;
         if let Some(target_host) = &self.target_host {
@@ -383,16 +385,11 @@ impl<'a> ActionHandler<'a> for Core {
         download_bitstream_pdi(self.target_host.as_deref(), &core_bitstream)?;
         Ok(())
     }
-    fn build(&self, _args: &'a BuildArgs<'a>) -> Result<()> {
-        run_command(
-            None,
-            "mkdir -p /tmp/caliptra-test-firmware/caliptra-test-firmware",
-        )?;
+    fn build(&self, args: &'a BuildArgs<'a>) -> Result<()> {
         let caliptra_sw = caliptra_sw_workspace_root();
-        run_command(
-                        None,
-                        &format!("(cd {} && cargo run --release -p caliptra-builder -- --all_elfs /tmp/caliptra-test-firmware)", caliptra_sw.display()),
-                    )?;
+        if !args.mcu {
+            build_caliptra_firmware(&caliptra_sw, args.fw_id.as_deref())?;
+        }
         if let Some(target_host) = &self.target_host {
             rsync_file(
                 target_host,
@@ -404,13 +401,18 @@ impl<'a> ActionHandler<'a> for Core {
         Ok(())
     }
 
-    fn build_test(&self, _args: &'a BuildTestArgs<'a>) -> Result<()> {
+    fn build_test(&self, args: &'a BuildTestArgs<'a>) -> Result<()> {
         let caliptra_sw = caliptra_sw_workspace_root();
         let base_name = caliptra_sw.file_name().unwrap().to_str().unwrap();
+        let package_filter_set = if let Some(package_filter) = args.package_filter {
+            format!("-E '{package_filter}'")
+        } else {
+            String::new()
+        };
 
         let mut base_cmd = build_base_docker_command()?;
         base_cmd.arg(
-                format!("(cd /{} && CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc cargo nextest archive --features=fpga_realtime,itrng --target=aarch64-unknown-linux-gnu --archive-file=/work-dir/caliptra-test-binaries.tar.zst --target-dir cross-target/)"
+                format!("(cd /{} && CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc cargo nextest archive --features=fpga_realtime,itrng {package_filter_set} --target=aarch64-unknown-linux-gnu --archive-file=/work-dir/caliptra-test-binaries.tar.zst --target-dir cross-target/)"
             , base_name));
         base_cmd.status().context("failed to cross compile tests")?;
         if let Some(target_host) = &self.target_host {
